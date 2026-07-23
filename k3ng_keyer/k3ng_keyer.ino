@@ -1769,6 +1769,14 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 #endif
 #endif
 
+#ifndef NETWORK_CLIENT_CLS
+  // PlatformIO's .ino prototype scanner isn't preprocessor-aware, so it generates a forward
+  // declaration for the web_print_*/web_client_* functions below even when FEATURE_WEB_SERVER
+  // is disabled and their bodies are compiled out. This keeps that declaration syntactically
+  // valid in builds where FEATURE_WEB_SERVER is off.
+  #define NETWORK_CLIENT_CLS int
+#endif
+
 #define memory_area_start (sizeof(configuration)+5)
 
 // Variables and stuff
