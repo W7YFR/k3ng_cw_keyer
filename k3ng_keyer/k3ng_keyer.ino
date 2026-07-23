@@ -9419,6 +9419,21 @@ void check_buttons() {
       }
     #endif //ifdef FEATURE_MEMORIES
 
+    #ifdef EXTRA_BUTTON
+      if (analogbuttontemp == EXTRA_BUTTON_INDEX) {
+        // Add your custom functionality here - this button doesn't interfere with memory or
+        // command button operation.
+
+        // This is just an example: turn the display on/off.
+        #ifdef FEATURE_OLED_SSD1306
+          toggle_display();
+        #endif //FEATURE_OLED_SSD1306
+
+        #ifdef DEBUG_BUTTONS
+        debug_serial_port->println(F("\ncheck_buttons: extra button pressed"));
+        #endif //DEBUG_BUTTONS
+      }
+    #endif //EXTRA_BUTTON
   } else { //if ((millis() - button_depress_time) < 500)   -- Button hold down
 
       if (analogbuttontemp == 0) {
@@ -9485,8 +9500,8 @@ void check_buttons() {
           } //if (paddle_pin_read(paddle_right) == LOW) {
         }
         key_tx = 1;
-      }  // (analogbuttontemp == 0)
-      if ((analogbuttontemp > 0) && (analogbuttontemp < analog_buttons_number_of_buttons)) {
+      } // (analogbuttontemp == 0)
+      if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
         while (button_array.Held(analogbuttontemp)) {
           if (((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) && (analogbuttontemp < (number_of_memories + 1))){
             #ifdef FEATURE_MEMORIES
@@ -9509,7 +9524,7 @@ void check_buttons() {
             key_tx = 1;
             configuration.sidetone_mode = previous_sidetone_mode;
         }
-      } //if ((analogbuttontemp > 0) && (analogbuttontemp < analog_buttons_number_of_buttons)) {
+      } //if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
     //}                                  // button hold
   }
   last_button_action = millis();
@@ -9523,6 +9538,15 @@ void check_buttons() {
 
 }
 #endif                                    // FEATURE_BUTTONS
+
+//------------------------------------------------------------------
+#if defined(EXTRA_BUTTON) && defined(FEATURE_OLED_SSD1306)
+void toggle_display() {
+  static boolean display_is_on = 1;
+  lcd.ssd1306WriteCmd(display_is_on ? SSD1306_DISPLAYOFF : SSD1306_DISPLAYON);
+  display_is_on = !display_is_on;
+}
+#endif //EXTRA_BUTTON && FEATURE_OLED_SSD1306
 
 //-------------------------------------------------------------------------------------------------------
 
