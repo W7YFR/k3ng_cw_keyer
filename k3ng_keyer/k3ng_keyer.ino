@@ -3907,7 +3907,19 @@ void service_display() {
 }
 #endif
 
+//-------------------------------------------------------------------------------------------------------
 
+#ifdef FEATURE_OLED_SSD1306
+void ssd1306_toggle_display() {
+  static boolean display_is_on = 1;
+  lcd.ssd1306WriteCmd(display_is_on ? SSD1306_DISPLAYOFF : SSD1306_DISPLAYON);
+  display_is_on = !display_is_on;
+}
+
+void ssd1306_clear_display() {
+  lcd.clear();
+}
+#endif //FEATURE_OLED_SSD1306
 
 //-------------------------------------------------------------------------------------------------------
 
