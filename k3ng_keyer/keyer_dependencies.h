@@ -3,6 +3,14 @@
   #define FEATURE_DISPLAY
 #endif
 
+#ifdef FEATURE_DISPLAY
+  // Manual forward declaration: lcd_center_print_timed_wpm() is defined indented inside an
+  // #ifdef block further down in k3ng_keyer.ino, and is called earlier in the file. PlatformIO's
+  // .ino prototype scanner only detects function definitions that start at column 0, so it misses
+  // this one and needs this declaration.
+  void lcd_center_print_timed_wpm();
+#endif
+
 #if defined(FEATURE_COMMAND_LINE_INTERFACE_ON_SECONDARY_PORT) && !defined(FEATURE_COMMAND_LINE_INTERFACE)
   #define FEATURE_COMMAND_LINE_INTERFACE
 #endif
