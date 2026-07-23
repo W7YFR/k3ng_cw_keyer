@@ -9367,7 +9367,7 @@ void check_buttons() {
       button_depress_time = 1001;  // if button 0 is held and a paddle gets hit, assume we have a hold and shortcut out
     }
   }
-  if ((millis() - button_depress_time) < 500) {  // regular button press
+  if ((millis() - button_depress_time) < button_hold_threshold_ms) {  // regular button press
     #ifdef FEATURE_COMMAND_MODE
       if (analogbuttontemp == 0) {
 
@@ -9419,7 +9419,7 @@ void check_buttons() {
       }
     #endif //ifdef FEATURE_MEMORIES
 
-  } else { //if ((millis() - button_depress_time) < 500)   -- Button hold down
+  } else { //if ((millis() - button_depress_time) < button_hold_threshold_ms)   -- Button hold down
 
       if (analogbuttontemp == 0) {
         key_tx = 0;
