@@ -1,1 +1,5 @@
 k3ng_keyer/.theia/launch.json
+
+# PlatformIO
+.pio/
+k3ng_keyer/*.ino.cpp
