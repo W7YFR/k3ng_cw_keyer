@@ -8405,8 +8405,14 @@ void command_mode() {
           #if defined(FEATURE_MEMORIES)
             if (button_that_was_pressed == 0){  // button 0 was hit - exit
               stay_in_command_mode = 0;
-            } else {
-              program_memory(button_that_was_pressed - 1); // a button other than 0 was pressed - program a memory
+            }
+            #ifdef EXTRA_BUTTON
+            else if (button_that_was_pressed == EXTRA_BUTTON_INDEX) {
+              extra_button_pressed(false, true);
+            }
+            #endif //EXTRA_BUTTON
+            else {
+              program_memory(button_that_was_pressed - 1); // a memory button was pressed - program a memory
             }
           #else
             stay_in_command_mode = 0;
@@ -9421,17 +9427,7 @@ void check_buttons() {
 
     #ifdef EXTRA_BUTTON
       if (analogbuttontemp == EXTRA_BUTTON_INDEX) {
-        // Add your custom functionality here - this button doesn't interfere with memory or
-        // command button operation.
-
-        // This is just an example: turn the display on/off.
-        #ifdef FEATURE_OLED_SSD1306
-          toggle_display();
-        #endif //FEATURE_OLED_SSD1306
-
-        #ifdef DEBUG_BUTTONS
-        debug_serial_port->println(F("\ncheck_buttons: extra button pressed"));
-        #endif //DEBUG_BUTTONS
+        extra_button_pressed(false, false);
       }
     #endif //EXTRA_BUTTON
   } else { //if ((millis() - button_depress_time) < 500)   -- Button hold down
@@ -9525,6 +9521,12 @@ void check_buttons() {
             configuration.sidetone_mode = previous_sidetone_mode;
         }
       } //if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
+      #ifdef EXTRA_BUTTON
+        if (analogbuttontemp == EXTRA_BUTTON_INDEX) {
+          while (button_array.Held(analogbuttontemp)) {}
+          extra_button_pressed(true, false);
+        }
+      #endif //EXTRA_BUTTON
     //}                                  // button hold
   }
   last_button_action = millis();
@@ -9540,13 +9542,25 @@ void check_buttons() {
 #endif                                    // FEATURE_BUTTONS
 
 //------------------------------------------------------------------
-#if defined(EXTRA_BUTTON) && defined(FEATURE_OLED_SSD1306)
-void toggle_display() {
-  static boolean display_is_on = 1;
-  lcd.ssd1306WriteCmd(display_is_on ? SSD1306_DISPLAYOFF : SSD1306_DISPLAYON);
-  display_is_on = !display_is_on;
+#ifdef EXTRA_BUTTON
+void extra_button_pressed(boolean is_hold, boolean is_command_mode) {
+  // Add your custom functionality here. Called any time the extra button is pressed,
+  // whether from normal operation (check_buttons()) or from inside command_mode() - it
+  // never falls through to memory or command button handling in either place.
+  //   is_hold: false for a tap, true if the button was held past button_hold_threshold_ms
+  //     (always false when is_command_mode is true - command_mode() has no hold concept)
+  //   is_command_mode: true if the button was pressed while in command_mode()
+
+  #ifdef DEBUG_BUTTONS
+  debug_serial_port->print(F("\nextra_button_pressed: button: "));
+  debug_serial_port->print(EXTRA_BUTTON_INDEX);
+  debug_serial_port->print(F(" is_hold: "));
+  debug_serial_port->print(is_hold);
+  debug_serial_port->print(F(" is_command_mode: "));
+  debug_serial_port->println(is_command_mode);
+  #endif //DEBUG_BUTTONS
 }
-#endif //EXTRA_BUTTON && FEATURE_OLED_SSD1306
+#endif //EXTRA_BUTTON
 
 //-------------------------------------------------------------------------------------------------------
 
