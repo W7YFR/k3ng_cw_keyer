@@ -17758,6 +17758,12 @@ void program_memory(int memory_number)
 
     while (loop1) {
        check_paddles();
+       #ifdef FEATURE_PADDLE_ECHO
+         service_paddle_echo();
+       #endif //FEATURE_PADDLE_ECHO
+       #ifdef FEATURE_DISPLAY
+         service_display();
+       #endif //FEATURE_DISPLAY
        if (dit_buffer) {
          sending_mode = MANUAL_SENDING;
          send_dit();
