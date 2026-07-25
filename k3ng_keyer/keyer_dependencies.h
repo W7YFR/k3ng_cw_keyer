@@ -55,6 +55,14 @@
   #error "FEATURE_COMMAND_MODE requires FEATURE_BUTTONS"
 #endif
 
+#if defined(EXTRA_BUTTONS) && !defined(FEATURE_BUTTONS)
+  #error "EXTRA_BUTTONS requires FEATURE_BUTTONS"
+#endif
+
+#if defined(EXTRA_BUTTONS) && (NUMBER_OF_EXTRA_BUTTONS < 1)
+  #error "NUMBER_OF_EXTRA_BUTTONS must be at least 1 when EXTRA_BUTTONS is defined"
+#endif
+
 #if defined(PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE)
 #error "PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE set"
 #endif

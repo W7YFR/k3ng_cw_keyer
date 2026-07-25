@@ -3,7 +3,8 @@
 
 
 // #define FEATURE_BUTTONS
-// #define EXTRA_BUTTON                   // adds one more analog button beyond the command + memory buttons, for a custom action (see check_buttons() in k3ng_keyer.ino) - requires FEATURE_BUTTONS
+// #define EXTRA_BUTTONS                  // adds one or more analog buttons beyond the command + memory buttons, for custom actions (see check_buttons() in k3ng_keyer.ino) - requires FEATURE_BUTTONS
+// #define NUMBER_OF_EXTRA_BUTTONS 1      // how many extra buttons to add to the button ladder when EXTRA_BUTTONS is defined
 // #define FEATURE_COMMAND_MODE
 // #define FEATURE_COMMAND_LINE_INTERFACE // Command Line Interface functionality
 // #define FEATURE_MEMORIES               // on the Arduino Due, you must have FEATURE_EEPROM_E24C1024 and E24C1024 EEPROM hardware in order to compile this
