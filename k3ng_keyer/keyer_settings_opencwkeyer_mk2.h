@@ -73,14 +73,22 @@
 #define eeprom_write_time_ms 30000
 
 #ifdef FEATURE_BUTTONS
-  #define analog_buttons_number_of_buttons 3  // includes the command button (command button + 3 memory buttons = 4)
+  #define number_of_memory_buttons 2  // hardware memory buttons, not counting the command button or the extra buttons (if enabled)
+  #ifdef EXTRA_BUTTONS
+    #define number_of_non_memory_buttons (1 + NUMBER_OF_EXTRA_BUTTONS)  // command button + extra buttons
+    // index of the first extra button within button_array / analogbuttontemp - extra buttons are always the last buttons in the ladder
+    #define FIRST_EXTRA_BUTTON_INDEX (analog_buttons_number_of_buttons - NUMBER_OF_EXTRA_BUTTONS)
+  #else
+    #define number_of_non_memory_buttons 1  // command button only
+  #endif
+  #define analog_buttons_number_of_buttons (number_of_memory_buttons + number_of_non_memory_buttons)
   #define analog_buttons_r1 10
   #define analog_buttons_r2 1
 #endif
 
 
 #if defined(FEATURE_BUTTONS) &&  !defined(FEATURE_PS2_KEYBOARD) && !defined(FEATURE_USB_KEYBOARD) && !defined(FEATURE_COMMAND_LINE_INTERFACE) && !defined(FEATURE_WINKEY_EMULATION)
-  #define number_of_memories byte(analog_buttons_number_of_buttons-1)
+  #define number_of_memories byte(number_of_memory_buttons)
 #else
   #define number_of_memories byte(12)
 #endif
