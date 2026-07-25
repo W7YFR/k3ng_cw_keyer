@@ -17897,7 +17897,9 @@ void program_memory(int memory_number)
     lcd_center_print_timed("Done", 0, default_display_msg_delay);
   #endif
 
-  play_memory(memory_number);
+  #ifndef OPTION_SKIP_SAVED_MEMORY_PLAYBACK
+    play_memory(memory_number);
+  #endif // OPTION_SKIP_SAVED_MEMORY_PLAYBACK
 
 
 }
