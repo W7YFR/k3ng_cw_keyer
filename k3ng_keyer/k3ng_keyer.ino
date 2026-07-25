@@ -9756,7 +9756,7 @@ void extra_button_pressed(byte extra_button_number, boolean is_hold, boolean is_
   //     (always false when is_command_mode is true - command_mode() has no hold concept)
   //   is_command_mode: true if the button was pressed while in command_mode()
 
-  if (!is_command_mode) {
+  if (!is_command_mode && extra_button_number == 0) {
     if (is_hold) {
       ssd1306_toggle_display();
     } else {
