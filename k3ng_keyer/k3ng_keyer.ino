@@ -17703,6 +17703,8 @@ void program_memory(int memory_number)
     return;
   }
 
+  keyer_machine_mode = KEYER_COMMAND_MODE_SPEED_OVERRIDE;  // record (and play back) at configuration.wpm instead of configuration.wpm_command_mode
+
   #ifdef FEATURE_DISPLAY
     String lcd_print_string;
     if (LCD_COLUMNS < 9){
@@ -17922,6 +17924,7 @@ void program_memory(int memory_number)
     play_memory(memory_number);
   #endif // OPTION_SKIP_SAVED_MEMORY_PLAYBACK
 
+  keyer_machine_mode = KEYER_COMMAND_MODE;
 
 }
 #endif
