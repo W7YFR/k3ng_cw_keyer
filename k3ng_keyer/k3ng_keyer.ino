@@ -17736,6 +17736,10 @@ void program_memory(int memory_number)
   dit_buffer = 0;
   dah_buffer = 0;
 
+  #ifdef FEATURE_BUTTONS
+    byte memory_button_index = memory_number + 1;  // the button that started this recording session - pressing it again restarts the recording
+  #endif //FEATURE_BUTTONS
+
   #if defined(FEATURE_BUTTONS) && !defined(FEATURE_STRAIGHT_KEY)
     while ((paddle_pin_read(paddle_left) == HIGH) && (paddle_pin_read(paddle_right) == HIGH) && (!analogbuttonread(0))) { }  // loop until user starts sending or hits the button
   #endif
@@ -17825,6 +17829,23 @@ void program_memory(int memory_number)
          while (analogbuttonread(0)) {    // hit the button to get out of command mode if no paddle was hit
            loop1 = 0;
            loop2 = 0;
+         }
+         if (analogbuttonread(memory_button_index)) {   // hit the same button that started this recording - start over
+           while (analogbuttonread(memory_button_index)) {}  // wait for release so it doesn't re-trigger
+           memory_location_index = 0;
+           space_count = 0;
+           #ifdef FEATURE_MEMORY_MACROS
+             macro_flag = 0;
+           #endif //FEATURE_MEMORY_MACROS
+           cwchar = 0;
+           paddle_hit = 0;
+           dit_buffer = 0;
+           dah_buffer = 0;
+           loop1 = 0;
+           boop();
+           #ifdef FEATURE_DISPLAY
+             lcd_center_print_timed(lcd_print_string, 0, default_display_msg_delay);
+           #endif //FEATURE_DISPLAY
          }
        #endif
     }  //loop1
