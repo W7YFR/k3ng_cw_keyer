@@ -19,6 +19,7 @@
 // #define FEATURE_USB_KEYBOARD          // Use a USB keyboard to send code - Uncomment three lines in k3ng_keyer.ino (search for note_usb_uncomment_lines)
 // #define FEATURE_CW_COMPUTER_KEYBOARD  // Have an Arduino Due or Leonardo act as a USB HID (Human Interface Device) keyboard and use the paddle to "type" characters on the computer -- uncomment this line in ino file: #include <Keyboard.h>
 // #define FEATURE_DEAD_OP_WATCHDOG
+// #define FEATURE_DIT_HOLD_RESET         // hold the dit paddle for dit_hold_reset_count consecutive dits, then release it - clears the display during normal operation, or restarts the in-progress recording if inside program_memory() - see dit_hold_reset_count in keyer_settings.h
 // #define FEATURE_AUTOSPACE
 // #define FEATURE_FARNSWORTH
 // #define FEATURE_DL2SBA_BANKSWITCH       // Switch memory banks feature as described here: http://dl2sba.com/index.php?option=com_content&view=article&id=131:nanokeyer&catid=15:shack&Itemid=27#english

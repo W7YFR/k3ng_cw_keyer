@@ -15,6 +15,7 @@
 //#define FEATURE_SIDETONE_SWITCH   // adds switch control for the sidetone output. requires an external toggle switch (assigned to an arduino pin - see keyer_pin_settings.h). 
 //#define FEATURE_SIDETONE_NEWTONE      // Use the NewTone library, ~1k smaller code size than the standard tone library. Uses timer1 (pins 9 or 10)  https://bitbucket.org/teckel12/arduino-new-tone/wiki/Home
 //#define FEATURE_DEAD_OP_WATCHDOG
+//#define FEATURE_DIT_HOLD_RESET         // hold the dit paddle for dit_hold_reset_count consecutive dits, then release it - clears the display during normal operation, or restarts the in-progress recording if inside program_memory() - see dit_hold_reset_count in keyer_settings.h
 #define FEATURE_AUTOSPACE
 //#define FEATURE_FARNSWORTH
 //#define FEATURE_DL2SBA_BANKSWITCH       // Switch memory banks feature as described here: http://dl2sba.com/index.php?option=com_content&view=article&id=131:nanokeyer&catid=15:shack&Itemid=27#english
