@@ -71,6 +71,7 @@
 #define default_wordsworth_repetition 1
 #define serial_program_memory_buffer_size 500
 #define eeprom_write_time_ms 30000
+#define button_hold_threshold_ms 500  // press vs. hold classification in check_buttons()
 
 
 #ifdef FEATURE_BUTTONS

@@ -71,6 +71,7 @@
 #define default_wordsworth_repetition 1
 #define serial_program_memory_buffer_size 500
 #define eeprom_write_time_ms 30000
+#define button_hold_threshold_ms 500  // press vs. hold classification in check_buttons()
 
 // CW<->RTTY DUAL MODE control - rear-panel slide switch: pin HIGH default = CW mode, LOW = TinyFSK mode
 // The "pin_run_tinyfsk" is only queried at boot, selecting the CW Keyer or TinyFSK RTTY sketch to launch
