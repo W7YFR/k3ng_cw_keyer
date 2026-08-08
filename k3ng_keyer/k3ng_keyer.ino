@@ -15561,11 +15561,13 @@ void receive_transmit_echo_practice(PRIMARY_SERIAL_CLS * port_to_use, byte pract
         // does the user want to exit?
         while(port_to_use->available() > 0) {
           incoming_char = port_to_use->read();
-          user_send_loop = 0;
-          loop1 = 0;
-          loop2 = 0;
-          if (correct_answer_led) digitalWrite(correct_answer_led, LOW);                 // clear the LEDs as we exit
-          if (wrong_answer_led)   digitalWrite(wrong_answer_led,   LOW);
+          if (incoming_char == '\\') {
+            user_send_loop = 0;
+            loop1 = 0;
+            loop2 = 0;
+            if (correct_answer_led) digitalWrite(correct_answer_led, LOW);               // clear the LEDs as we exit
+            if (wrong_answer_led)   digitalWrite(wrong_answer_led,   LOW);
+          }
         }
         #ifdef FEATURE_BUTTONS
           while (analogbuttonread(0)) {                                                 // can exit by pressing the Command Mode button
