@@ -3848,7 +3848,7 @@ void service_display() {
          lcd.setCursor(0,y);
          #else
          lcd.setCursor(0,y*2);
-         #endif;
+         #endif
       }
     } else {
       if (lcd_scroll_buffer[y].charAt(x) > 0){
@@ -9346,7 +9346,6 @@ void check_buttons() {
     debug_serial_port->println(F("loop: entering check_buttons"));
   #endif
 
-  static long last_button_action = 0;
   int analogbuttontemp = button_array.Pressed();
   long button_depress_time;
   byte paddle_was_hit = 0;
@@ -9512,7 +9511,6 @@ void check_buttons() {
       } //if ((analogbuttontemp > 0) && (analogbuttontemp < analog_buttons_number_of_buttons)) {
     //}                                  // button hold
   }
-  last_button_action = millis();
 
   #ifdef FEATURE_SLEEP
     last_activity_time = millis();
@@ -13880,8 +13878,11 @@ void service_paddle_echo()
   #endif
 
   static byte paddle_echo_space_sent = 1;
-  byte character_to_send = 0;
-  static byte no_space = 0;
+
+  #if defined(FEATURE_CW_COMPUTER_KEYBOARD)
+    byte character_to_send = 0;
+    static byte no_space = 0;
+  #endif //defined(FEATURE_CW_COMPUTER_KEYBOARD)
 
   #if defined(OPTION_PROSIGN_SUPPORT)
     byte byte_temp = 0;
@@ -14617,11 +14618,9 @@ void serial_set_weighting(PRIMARY_SERIAL_CLS * port_to_use) {
 
 #if defined(FEATURE_SERIAL) && defined(FEATURE_COMMAND_LINE_INTERFACE)
 void serial_tune_command (PRIMARY_SERIAL_CLS * port_to_use) {
-  byte incoming;
-
   delay(100);
   while (port_to_use->available() > 0) {  // clear out the buffer if anything is there
-    incoming = port_to_use->read();
+    port_to_use->read();
   }
 
   sending_mode = MANUAL_SENDING;
@@ -14633,7 +14632,7 @@ void serial_tune_command (PRIMARY_SERIAL_CLS * port_to_use) {
     while (port_to_use->available() == 0) {}
   #endif
   while (port_to_use->available() > 0) {  // clear out the buffer if anything is there
-    incoming = port_to_use->read();
+    port_to_use->read();
   }
   tx_and_sidetone_key(0);
 }
@@ -15566,7 +15565,6 @@ void random_practice(PRIMARY_SERIAL_CLS * port_to_use,byte random_mode,byte grou
   byte loop1 = 1;
   byte x = 0;
   byte y = 0;
-  char incoming_char = ' ';
   char random_character = 0;
 
   randomSeed(millis());
@@ -15586,7 +15584,7 @@ void random_practice(PRIMARY_SERIAL_CLS * port_to_use,byte random_mode,byte grou
   #endif
 
   while (port_to_use->available() > 0) {  // clear out the buffer if anything is there
-    incoming_char = port_to_use->read();
+    port_to_use->read();
   }
 
   while (loop1){
@@ -16076,7 +16074,6 @@ void serial_practice_non_interactive(PRIMARY_SERIAL_CLS * port_to_use,byte pract
   byte loop2;
   byte x;
   String cw_to_send_to_user(10);
-  char incoming_char = ' ';
   byte practice_type;
   char word_buffer[10];
 
@@ -16099,7 +16096,7 @@ void serial_practice_non_interactive(PRIMARY_SERIAL_CLS * port_to_use,byte pract
   port_to_use->println(F("Callsign receive practice\r\n"));
 
   while (port_to_use->available() > 0) {  // clear out the buffer if anything is there
-    incoming_char = port_to_use->read();
+    port_to_use->read();
   }
 
 
@@ -17689,6 +17686,8 @@ byte play_memory(byte memory_number) {
 
   } //for (int y = (memory_start(memory_number)); (y < (memory_end(memory_number)+1)); y++)
 
+  return 1;
+
 }
 #endif
 
@@ -18287,6 +18286,8 @@ void service_cw_decoder() {
   static byte space_sent = 0;
   #ifdef FEATURE_COMMAND_LINE_INTERFACE
     static byte screen_column = 0;
+  #endif
+  #ifdef DEBUG_CW_DECODER_WPM
     static int last_printed_decoder_wpm = 0;
   #endif
 
