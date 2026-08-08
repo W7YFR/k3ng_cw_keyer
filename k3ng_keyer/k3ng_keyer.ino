@@ -18331,9 +18331,11 @@ void initialize_pins() {
   }
 
   #ifdef FEATURE_CW_DECODER
-    pinMode (cw_decoder_pin, INPUT_PULLUP);
-    // pinMode (cw_decoder_pin, INPUT);
-    // digitalWrite (cw_decoder_pin, HIGH);
+    if (cw_decoder_pin) {
+      pinMode (cw_decoder_pin, INPUT_PULLUP);
+      // pinMode (cw_decoder_pin, INPUT);
+      // digitalWrite (cw_decoder_pin, HIGH);
+    }
 
     #if defined(OPTION_CW_DECODER_GOERTZEL_AUDIO_DETECTOR)
       digitalWrite (cw_decoder_audio_input_pin, LOW);
