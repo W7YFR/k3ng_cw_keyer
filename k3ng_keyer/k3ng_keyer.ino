@@ -8506,6 +8506,10 @@ void command_progressive_5_char_echo_practice() {
   byte keyer_mode_before = configuration.keyer_mode;
   byte progressive_step_counter;
   char word_buffer[10];
+  #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+    byte echo_missed_this_word = 0;
+    byte echo_correct_streak = 0;
+  #endif
 
   speed_mode = SPEED_NORMAL;                 // put us in normal speed mode
   if ((configuration.keyer_mode != IAMBIC_A) && (configuration.keyer_mode != IAMBIC_B)) {
@@ -8594,6 +8598,11 @@ void command_progressive_5_char_echo_practice() {
         progressive_step_counter = 255;
     //     break;
     // } //switch (practice_mode)
+
+    #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+      echo_missed_this_word = 0;
+      echo_correct_streak = 0;
+    #endif
 
     loop2 = 1;
     while (loop2) {
@@ -8732,11 +8741,22 @@ void command_progressive_5_char_echo_practice() {
             beep();
             send_char(' ',0);
             send_char(' ',0);
-            loop2 = 0;
+            #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+              echo_correct_streak++;
+              if ((!echo_missed_this_word) || (echo_correct_streak >= 2)) {
+                loop2 = 0;
+              }
+            #else
+              loop2 = 0;
+            #endif
           } else {                                                                        // wrong answer
             boop();
             send_char(' ',0);
             send_char(' ',0);
+            #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+              echo_missed_this_word = 1;
+              echo_correct_streak = 0;
+            #endif
           }
         }                                                                                 // if (progressive_step_counter < 255)
       }                                                                                   // if (loop1 && loop2)
@@ -15106,6 +15126,10 @@ void receive_transmit_echo_practice(PRIMARY_SERIAL_CLS * port_to_use, byte pract
   byte progressive_step_counter;
   byte practice_mode;
   char word_buffer[10];
+  #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+    byte echo_missed_this_word = 0;
+    byte echo_correct_streak = 0;
+  #endif
 
   speed_mode = SPEED_NORMAL;                 // put us in normal speed mode
   if ((configuration.keyer_mode != IAMBIC_A) && (configuration.keyer_mode != IAMBIC_B)) {
@@ -15190,6 +15214,13 @@ void receive_transmit_echo_practice(PRIMARY_SERIAL_CLS * port_to_use, byte pract
         break;
 
     } // switch (practice_mode)
+
+    cw_to_send_to_user.replace("%", "0/0");                                          // "%" is shorthand for the three-character group 0/0
+
+    #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+      echo_missed_this_word = 0;
+      echo_correct_streak = 0;
+    #endif
 
     loop2 = 1;
 
@@ -15340,11 +15371,22 @@ void receive_transmit_echo_practice(PRIMARY_SERIAL_CLS * port_to_use, byte pract
             beep();
             send_char(' ', 0);
             send_char(' ',0);
-            loop2 = 0;
+            #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+              echo_correct_streak++;
+              if ((!echo_missed_this_word) || (echo_correct_streak >= 2)) {
+                loop2 = 0;
+              }
+            #else
+              loop2 = 0;
+            #endif
           } else {
             boop();
             send_char(' ',0);
             send_char(' ',0);
+            #ifdef OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS
+              echo_missed_this_word = 1;
+              echo_correct_streak = 0;
+            #endif
           }
         }
       }

@@ -25,6 +25,7 @@
 //#define FEATURE_DIT_DAH_BUFFER_CONTROL
 //#define FEATURE_ALPHABET_SEND_PRACTICE  // enables command mode S command - created by Ryan, KC2ZWM
 //#define FEATURE_TRAINING_PADDLE        // makes the word/callsign/QSO training tables available without FEATURE_TRAINING_COMMAND_LINE_INTERFACE, for paddle-only (no serial terminal) echo practice in Command Mode
+//#define OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS  // in echo practice, once you miss a word you must get it right twice in a row before moving on to the next word
 //#define FEATURE_COMMAND_MODE_PROGRESSIVE_5_CHAR_ECHO_PRACTICE // enables command mode U - also requires FEATURE_TRAINING_COMMAND_LINE_INTERFACE or FEATURE_TRAINING_PADDLE
 //#define FEATURE_PTT_INTERLOCK
 //#define FEATURE_QLF
