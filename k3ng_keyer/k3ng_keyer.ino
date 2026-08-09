@@ -2340,7 +2340,7 @@ unsigned long automatic_sending_interruption_time = 0;
 
 unsigned long millis_rollover = 0;
 
-#if defined(FEATURE_TRAINING_COMMAND_LINE_INTERFACE)
+#if defined(FEATURE_TRAINING_COMMAND_LINE_INTERFACE) || defined(FEATURE_TRAINING_PADDLE)
   byte check_serial_override = 0;
   #if defined(OPTION_WORDSWORTH_CZECH)
     #include "keyer_training_text_czech.h"
@@ -8311,7 +8311,7 @@ void command_mode() {
         #endif                                //FEATURE_ALPHABET_SEND_PRACTICE
 
         #ifdef FEATURE_COMMAND_MODE_PROGRESSIVE_5_CHAR_ECHO_PRACTICE
-          case 112:  // U - 5 Character Echo Practice
+          case 112:  // U - QSO Echo Practice
             command_progressive_5_char_echo_practice();
             stay_in_command_mode = 0;
             break;
@@ -8489,7 +8489,7 @@ void command_display_memory(byte memory_number) {
 
 //-------------------------------------------------------------------------------------------------------
 
-#if defined(FEATURE_COMMAND_MODE_PROGRESSIVE_5_CHAR_ECHO_PRACTICE) && defined(FEATURE_COMMAND_MODE)
+#if defined(FEATURE_COMMAND_MODE_PROGRESSIVE_5_CHAR_ECHO_PRACTICE) && defined(FEATURE_COMMAND_MODE) && (defined(FEATURE_TRAINING_COMMAND_LINE_INTERFACE) || defined(FEATURE_TRAINING_PADDLE))
 void command_progressive_5_char_echo_practice() {
 
   byte loop1 = 1;
@@ -8518,18 +8518,18 @@ void command_progressive_5_char_echo_practice() {
     lcd_clear();
     if (LCD_COLUMNS > 17){
       lcd_center_print_timed("Receive / Transmit", 0, default_display_msg_delay);
-      lcd_center_print_timed("5 Char Echo Practice", 1, default_display_msg_delay);
+      lcd_center_print_timed("QSO Echo Practice", 1, default_display_msg_delay);
       if (LCD_ROWS > 2){
         lcd_center_print_timed("Cmd button to exit", 2, default_display_msg_delay);
       }
     } else {
       if (LCD_COLUMNS < 9){
-        lcd_center_print_timed("RXTX 5Ch", 0, default_display_msg_delay);
+        lcd_center_print_timed("RXTX QSO", 0, default_display_msg_delay);
         if (LCD_ROWS > 1){
           lcd_center_print_timed("EchoPrct", 1, default_display_msg_delay);
         }
       } else {
-        lcd_center_print_timed("RX / TX 5 Char", 0, default_display_msg_delay);
+        lcd_center_print_timed("RX / TX QSO", 0, default_display_msg_delay);
         if (LCD_ROWS > 1){
           lcd_center_print_timed("Echo Practice", 1, default_display_msg_delay);
         }
@@ -8549,13 +8549,12 @@ void command_progressive_5_char_echo_practice() {
   #endif
 
   while (loop1) {
+    // TODO: paddle-selectable practice_mode (callsigns / word groups / names / QSO / mixed) - for now, QSO words only
     // if (practice_mode_called == ECHO_MIXED){
     //   practice_mode = random(ECHO_2_CHAR_WORDS,ECHO_QSO_WORDS+1);
     // } else {
     //   practice_mode = practice_mode_called;
     // }
-
-    // progressive_step_counter = 255;
 
     // switch (practice_mode){
     //   case CALLSIGN_INTERNATIONAL:
@@ -8565,37 +8564,34 @@ void command_progressive_5_char_echo_practice() {
     //     cw_to_send_to_user = generate_callsign(practice_mode);
     //     break;
     //   case ECHO_PROGRESSIVE_5:
-        cw_to_send_to_user = (char)random(65,91);
-        cw_to_send_to_user.concat((char)random(65,91));
-        cw_to_send_to_user.concat((char)random(65,91));
-        cw_to_send_to_user.concat((char)random(65,91));
-        cw_to_send_to_user.concat((char)random(65,91));
-        progressive_step_counter = 1;
+    //     cw_to_send_to_user = (char)random(65,91);
+    //     cw_to_send_to_user.concat((char)random(65,91));
+    //     cw_to_send_to_user.concat((char)random(65,91));
+    //     cw_to_send_to_user.concat((char)random(65,91));
+    //     cw_to_send_to_user.concat((char)random(65,91));
+    //     progressive_step_counter = 1;
     //     break;
     //   case ECHO_2_CHAR_WORDS:
-    //     //word_index = random(0,s2_size);  // min parm is inclusive, max parm is exclusive
     //     strcpy_P(word_buffer, (char*)pgm_read_word(&(s2_table[random(0,s2_size)])));
     //     cw_to_send_to_user = word_buffer;
     //     break;
     //   case ECHO_3_CHAR_WORDS:
-    //     //word_index = random(0,s3_size);  // min parm is inclusive, max parm is exclusive
     //     strcpy_P(word_buffer, (char*)pgm_read_word(&(s3_table[random(0,s3_size)])));
     //     cw_to_send_to_user = word_buffer;
     //     break;
     //   case ECHO_4_CHAR_WORDS:
-    //     //word_index = random(0,s4_size);  // min parm is inclusive, max parm is exclusive
     //     strcpy_P(word_buffer, (char*)pgm_read_word(&(s4_table[random(0,s4_size)])));
     //     cw_to_send_to_user = word_buffer;
     //     break;
     //   case ECHO_NAMES:
-    //     //word_index = random(0,name_size);  // min parm is inclusive, max parm is exclusive
     //     strcpy_P(word_buffer, (char*)pgm_read_word(&(name_table[random(0,name_size)])));
     //     cw_to_send_to_user = word_buffer;
     //     break;
     //   case ECHO_QSO_WORDS:
-    //     //word_index = random(0,qso_size);  // min parm is inclusive, max parm is exclusive
-    //     strcpy_P(word_buffer, (char*)pgm_read_word(&(qso_table[random(0,qso_size)])));
-    //     cw_to_send_to_user = word_buffer;
+        strcpy_P(word_buffer, (char*)pgm_read_word(&(qso_table[random(0,qso_size)])));
+        cw_to_send_to_user = word_buffer;
+        cw_to_send_to_user.replace("%", "0/0");                                        // "%" is shorthand for the three-character group 0/0
+        progressive_step_counter = 255;
     //     break;
     // } //switch (practice_mode)
 
@@ -8658,11 +8654,13 @@ void command_progressive_5_char_echo_practice() {
             debug_serial_port->println(F("command_progressive_5_char_echo_practice: user_send_loop: hit length_letterspace"));
           #endif
           incoming_char = convert_cw_number_to_ascii(cw_char);
-          //port_to_use->print(incoming_char);
           user_sent_cw.concat(incoming_char);
+          #ifdef FEATURE_DISPLAY
+            display_scroll_print_char(incoming_char);
+            service_display();
+          #endif
           cw_char = 0;
           paddle_hit = 0;
-          // TODO - print it to serial and lcd
         }
 
         // do we have all the characters from the user? - if so, get out of user_send_loop
@@ -8744,7 +8742,7 @@ void command_progressive_5_char_echo_practice() {
   configuration.keyer_mode = keyer_mode_before;
   paddle_echo_buffer = 0;
 }
-#endif //defined(FEATURE_COMMAND_MODE_PROGRESSIVE_5_CHAR_ECHO_PRACTICE) && defined(FEATURE_COMMAND_MODE)
+#endif //defined(FEATURE_COMMAND_MODE_PROGRESSIVE_5_CHAR_ECHO_PRACTICE) && defined(FEATURE_COMMAND_MODE) && (defined(FEATURE_TRAINING_COMMAND_LINE_INTERFACE) || defined(FEATURE_TRAINING_PADDLE))
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -14641,7 +14639,7 @@ void serial_tune_command (PRIMARY_SERIAL_CLS * port_to_use) {
 
 //---------------------------------------------------------------------
 
-#ifdef FEATURE_TRAINING_COMMAND_LINE_INTERFACE
+#if defined(FEATURE_TRAINING_COMMAND_LINE_INTERFACE) || defined(FEATURE_TRAINING_PADDLE)
 
 String generate_callsign(byte callsign_mode) {
 
