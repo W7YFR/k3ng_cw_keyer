@@ -8515,6 +8515,7 @@ void command_progressive_5_char_echo_practice() {
 
   #ifdef FEATURE_DISPLAY                   // enhanced by Fred, VK2EFL
     lcd_clear();
+    display_scroll_reset();
     if (LCD_COLUMNS > 17){
       lcd_center_print_timed("Receive / Transmit", 0, default_display_msg_delay);
       lcd_center_print_timed("QSO Echo Practice", 1, default_display_msg_delay);
@@ -8604,12 +8605,15 @@ void command_progressive_5_char_echo_practice() {
       // send the CW to the user
       while ((x < (cw_to_send_to_user.length())) && (x < progressive_step_counter)) {
         send_char(cw_to_send_to_user[x],KEYER_NORMAL);
-        // test
-        // port_to_use->print(cw_to_send_to_user[x]);
-        //
+        #ifdef FEATURE_DISPLAY
+          display_scroll_print_char(cw_to_send_to_user[x]);
+          service_display();
+        #endif
         x++;
       }
-      //port_to_use->println();
+      #ifdef FEATURE_DISPLAY
+        display_scroll_column_pointer = LCD_COLUMNS;   // force the user's keyed response onto a fresh line, below the target word
+      #endif
 
       while (user_send_loop) {
         // get their paddle input
@@ -8665,7 +8669,9 @@ void command_progressive_5_char_echo_practice() {
         // do we have all the characters from the user? - if so, get out of user_send_loop
         if ((user_sent_cw.length() >= cw_to_send_to_user.length()) || ((progressive_step_counter < 255) && (user_sent_cw.length() == progressive_step_counter))) {
           user_send_loop = 0;
-          //port_to_use->println();
+          #ifdef FEATURE_DISPLAY
+            display_scroll_column_pointer = LCD_COLUMNS;   // force the next attempt's target word onto a fresh line
+          #endif
         }
 
         // does the user want to exit?
