@@ -8505,7 +8505,6 @@ void command_progressive_5_char_echo_practice() {
   byte speed_mode_before = speed_mode;
   byte keyer_mode_before = configuration.keyer_mode;
   byte progressive_step_counter;
-  byte practice_mode;
   char word_buffer[10];
 
   speed_mode = SPEED_NORMAL;                 // put us in normal speed mode
