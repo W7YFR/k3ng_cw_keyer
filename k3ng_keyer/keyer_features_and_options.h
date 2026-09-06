@@ -57,10 +57,10 @@
 // #define FEATURE_QLF
 // #define FEATURE_EEPROM_E24C1024
 // #define FEATURE_STRAIGHT_KEY
-// #define FEATURE_STRAIGHT_KEY_PADDLE
+#define FEATURE_STRAIGHT_KEY_PADDLE
 // #define FEATURE_DYNAMIC_DAH_TO_DIT_RATIO
 #define FEATURE_PADDLE_ECHO         // you may also need to comment out line 19 in the file keyer_dependencies.h
-// #define FEATURE_STRAIGHT_KEY_ECHO
+#define FEATURE_STRAIGHT_KEY_ECHO
 // #define FEATURE_AMERICAN_MORSE
 // #define FEATURE_4x4_KEYPAD          // code contributed by Jack, W0XR - documentation: https://github.com/k3ng/k3ng_cw_keyer/wiki/380-Feature:-Keypad
 // #define FEATURE_3x4_KEYPAD          // code contributed by Jack, W0XR - documentation: https://github.com/k3ng/k3ng_cw_keyer/wiki/380-Feature:-Keypad
