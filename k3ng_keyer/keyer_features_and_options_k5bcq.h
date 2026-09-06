@@ -46,6 +46,7 @@
 // #define FEATURE_QLF
 // #define FEATURE_EEPROM_E24C1024
 // #define FEATURE_STRAIGHT_KEY          //Highly recommended to leave disabled.  Booting with straight key plugged in works better (timing issues w/ this feature w/paddles)
+// #define FEATURE_STRAIGHT_KEY_PADDLE
 // #define FEATURE_DYNAMIC_DAH_TO_DIT_RATIO
 // #define FEATURE_PADDLE_ECHO
 // #define FEATURE_STRAIGHT_KEY_ECHO

@@ -21,7 +21,14 @@
 #endif
 
 
-#if defined(FEATURE_STRAIGHT_KEY) && (defined(FEATURE_STRAIGHT_KEY_ECHO) || defined(FEATURE_MEMORIES) || defined(FEATURE_CW_COMPUTER_KEYBOARD))
+// A straight key can be driven either by a dedicated input pin (FEATURE_STRAIGHT_KEY) or by
+// interpreting the dit paddle as a straight key when keyer_mode == STRAIGHT
+// (FEATURE_STRAIGHT_KEY_PADDLE).  Code shared by both sources keys off this derived macro.
+#if defined(FEATURE_STRAIGHT_KEY) || defined(FEATURE_STRAIGHT_KEY_PADDLE)
+  #define FEATURE_STRAIGHT_KEY_ANY
+#endif
+
+#if defined(FEATURE_STRAIGHT_KEY_ANY) && (defined(FEATURE_STRAIGHT_KEY_ECHO) || defined(FEATURE_MEMORIES) || defined(FEATURE_CW_COMPUTER_KEYBOARD))
   #define FEATURE_STRAIGHT_KEY_DECODE
 #endif
 
