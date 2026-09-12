@@ -22,6 +22,7 @@
 // #define FEATURE_DEAD_OP_WATCHDOG
 // #define FEATURE_AUTOSPACE
 // #define FEATURE_FARNSWORTH
+// #define FEATURE_FARNSWORTH_POTENTIOMETER // dedicated pot setting the Farnsworth character speed (farnsworth_potentiometer in keyer_pin_settings.h); requires FEATURE_FARNSWORTH
 // #define FEATURE_DL2SBA_BANKSWITCH       // Switch memory banks feature as described here: http://dl2sba.com/index.php?option=com_content&view=article&id=131:nanokeyer&catid=15:shack&Itemid=27#english
 // #define FEATURE_LCD_4BIT                // classic LCD display using 4 I/O lines
 // #define FEATURE_LCD_8BIT                // classic LCD display using 8 I/O lines

@@ -25,6 +25,9 @@
 #define wpm_limit_low 5
 #define wpm_limit_high 60
 #define potentiometer_change_threshold 0.9 // don't change the keyer speed until pot wpm has changed more than this
+#define farnsworth_pot_low_value 0       // Farnsworth potentiometer character WPM fully CCW (0 = Farnsworth off) - requires FEATURE_FARNSWORTH_POTENTIOMETER
+#define farnsworth_pot_high_value 40     // Farnsworth potentiometer character WPM fully CW - requires FEATURE_FARNSWORTH_POTENTIOMETER
+#define farnsworth_pot_change_threshold 0.9 // don't change the Farnsworth character speed until pot wpm has changed more than this
 #define send_buffer_size 150
 #define default_length_letterspace 3
 #define default_length_wordspace 7

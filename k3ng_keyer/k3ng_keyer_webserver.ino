@@ -734,10 +734,11 @@ void web_print_page_keyer_settings(NETWORK_CLIENT_CLS client){
 
   web_print_control_radio(client,"sm",SPEED_NORMAL,(speed_mode == SPEED_NORMAL)?1:0,"Normal Speed Mode ");
 
-  web_print_control_textbox(client,"wp","addr",(int)configuration.wpm,""," WPM ");
-
   #if defined(FEATURE_FARNSWORTH)
-    web_print_control_textbox(client,"fw","addr",(int)configuration.wpm_farnsworth,""," Farnsworth WPM");
+    web_print_control_textbox(client,"wp","addr",(int)configuration.wpm,""," Effective WPM ");
+    web_print_control_textbox(client,"fw","addr",(int)configuration.wpm_farnsworth,""," Character WPM (Farnsworth)");
+  #else
+    web_print_control_textbox(client,"wp","addr",(int)configuration.wpm,""," WPM ");
   #endif //FEATURE_FARNSWORTH
 
   web_client_println(client,"<br>");
