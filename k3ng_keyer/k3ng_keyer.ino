@@ -1625,6 +1625,9 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 
 #if defined(FEATURE_BUTTONS)
   #include "src/buttonarray/buttonarray.h"
+  #if analog_buttons_number_of_buttons > MAX_ARRAY_BUTTONS
+    #error "analog_buttons_number_of_buttons exceeds MAX_ARRAY_BUTTONS - reduce NUMBER_OF_EXTRA_BUTTONS or number_of_memory_buttons"
+  #endif
 #endif
 
 #if defined(FEATURE_SIDETONE_NEWTONE) && !defined(OPTION_SIDETONE_DIGITAL_OUTPUT_NO_SQUARE_WAVE)
@@ -8464,8 +8467,14 @@ void command_mode() {
           #if defined(FEATURE_MEMORIES)
             if (button_that_was_pressed == 0){  // button 0 was hit - exit
               stay_in_command_mode = 0;
-            } else {
-              program_memory(button_that_was_pressed - 1); // a button other than 0 was pressed - program a memory
+            }
+            #ifdef EXTRA_BUTTONS
+            else if (button_that_was_pressed >= FIRST_EXTRA_BUTTON_INDEX) {
+              extra_button_pressed(button_that_was_pressed - FIRST_EXTRA_BUTTON_INDEX, false, true);
+            }
+            #endif //EXTRA_BUTTONS
+            else {
+              program_memory(button_that_was_pressed - 1); // a memory button was pressed - program a memory
             }
           #else
             stay_in_command_mode = 0;
@@ -9478,6 +9487,11 @@ void check_buttons() {
       }
     #endif //ifdef FEATURE_MEMORIES
 
+    #ifdef EXTRA_BUTTONS
+      if (analogbuttontemp >= FIRST_EXTRA_BUTTON_INDEX) {
+        extra_button_pressed(analogbuttontemp - FIRST_EXTRA_BUTTON_INDEX, false, false);
+      }
+    #endif //EXTRA_BUTTONS
   } else { //if ((millis() - button_depress_time) < 500)   -- Button hold down
 
       if (analogbuttontemp == 0) {
@@ -9544,8 +9558,8 @@ void check_buttons() {
           } //if (paddle_pin_read(paddle_right) == LOW) {
         }
         key_tx = 1;
-      }  // (analogbuttontemp == 0)
-      if ((analogbuttontemp > 0) && (analogbuttontemp < analog_buttons_number_of_buttons)) {
+      } // (analogbuttontemp == 0)
+      if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
         while (button_array.Held(analogbuttontemp)) {
           if (((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) && (analogbuttontemp < (number_of_memories + 1))){
             #ifdef FEATURE_MEMORIES
@@ -9568,7 +9582,13 @@ void check_buttons() {
             key_tx = 1;
             configuration.sidetone_mode = previous_sidetone_mode;
         }
-      } //if ((analogbuttontemp > 0) && (analogbuttontemp < analog_buttons_number_of_buttons)) {
+      } //if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
+      #ifdef EXTRA_BUTTONS
+        if (analogbuttontemp >= FIRST_EXTRA_BUTTON_INDEX) {
+          while (button_array.Held(analogbuttontemp)) {}
+          extra_button_pressed(analogbuttontemp - FIRST_EXTRA_BUTTON_INDEX, true, false);
+        }
+      #endif //EXTRA_BUTTONS
     //}                                  // button hold
   }
   last_button_action = millis();
@@ -9582,6 +9602,28 @@ void check_buttons() {
 
 }
 #endif                                    // FEATURE_BUTTONS
+
+//------------------------------------------------------------------
+#ifdef EXTRA_BUTTONS
+void extra_button_pressed(byte extra_button_number, boolean is_hold, boolean is_command_mode) {
+  // Add your custom functionality here. Called any time an extra button is pressed,
+  // whether from normal operation (check_buttons()) or from inside command_mode() - it
+  // never falls through to memory or command button handling in either place.
+  //   extra_button_number: 0-based index among the extra buttons (0 = first extra button, 1 = second, ...)
+  //   is_hold: false for a tap, true if the button was held past button_hold_threshold_ms
+  //     (always false when is_command_mode is true - command_mode() has no hold concept)
+  //   is_command_mode: true if the button was pressed while in command_mode()
+
+  #ifdef DEBUG_BUTTONS
+  debug_serial_port->print(F("\nextra_button_pressed: extra_button_number: "));
+  debug_serial_port->print(extra_button_number);
+  debug_serial_port->print(F(" is_hold: "));
+  debug_serial_port->print(is_hold);
+  debug_serial_port->print(F(" is_command_mode: "));
+  debug_serial_port->println(is_command_mode);
+  #endif //DEBUG_BUTTONS
+}
+#endif //EXTRA_BUTTONS
 
 //-------------------------------------------------------------------------------------------------------
 
