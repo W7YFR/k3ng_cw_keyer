@@ -50,7 +50,7 @@ English code training word lists from gen_cw_words.pl by Andy Stewart, KB1OIQ
     \j###  Dah to dit ratio (300 = 3.00, do \j alone to set to default)
     \k     CW Training Module                                     (requires FEATURE_TRAINING_COMMAND_LINE_INTERFACE)
     \l##   Set weighting (50 = normal, do \l alone to set to default)
-    \m###  Set Farnsworth speed
+    \m###  Set Farnsworth character speed (must exceed \w speed; 0 = disabled)
     \n     Toggle paddle reverse
     \o     Toggle sidetone on/off
     \p#(#) Program memory #
@@ -60,7 +60,7 @@ English code training word lists from gen_cw_words.pl by Andy Stewart, KB1OIQ
     \t     Tune mode
     \u     Manual PTT toggle
     \v     Toggle potentiometer active / inactive   (requires FEATURE_POTENTIOMETER)
-    \w###  Set speed in WPM
+    \w###  Set speed in WPM (this is the effective/overall speed when Farnsworth is active)
     \x#    Switch to transmitter #
     \y#    Change wordspace to # elements (# = 1 to 9)
     \z     Autospace on/off
@@ -179,7 +179,7 @@ English code training word lists from gen_cw_words.pl by Andy Stewart, KB1OIQ
    CTRL-G           Bug
    CTRL-H           Toggle Hell Mode On/Off              (requires FEATURE_HELL)
    CTRL-I           TX enable / disable
-   CTRL-M           Set Farnsworth Speed (0 = disabled)  (requires FEATURE_FARNSWORTH)
+   CTRL-M           Set Farnsworth character speed (0 = disabled)  (requires FEATURE_FARNSWORTH)
    CTRL-N           Paddle Reverse
    CTRL-O           Toggle Sidetone On/Off
    CTRL-S           CMOS Superkeyer Timing On/Off
@@ -1618,6 +1618,14 @@ If you offer a hardware kit using this software, show your appreciation by sendi
   #error "You cannot define paddle_left or paddle_right as 0 to disable"
 #endif
 
+#if defined(FEATURE_FARNSWORTH_POTENTIOMETER) && !defined(FEATURE_FARNSWORTH)
+  #error "FEATURE_FARNSWORTH_POTENTIOMETER requires FEATURE_FARNSWORTH"
+#endif
+
+#if defined(FEATURE_FARNSWORTH_POTENTIOMETER) && !defined(FEATURE_POTENTIOMETER)
+  #error "FEATURE_FARNSWORTH_POTENTIOMETER requires FEATURE_POTENTIOMETER"
+#endif
+
 #if defined(FEATURE_DUAL_MODE_KEYER_AND_TINYFSK)
   #include "TinyFSK.h"
   uint8_t runTinyFSK = 0;
@@ -1951,6 +1959,10 @@ byte pot_wpm_low_value;
   byte last_pot_wpm_read;
   int pot_full_scale_reading = default_pot_full_scale_reading;
 #endif //FEATURE_POTENTIOMETER
+
+#ifdef FEATURE_FARNSWORTH_POTENTIOMETER
+  byte last_pot_farnsworth_read;
+#endif //FEATURE_FARNSWORTH_POTENTIOMETER
 
 #if defined(FEATURE_SERIAL)
   #if !defined(OPTION_DISABLE_SERIAL_PORT_CHECKING_WHILE_SENDING_CW)
@@ -5784,10 +5796,60 @@ void check_potentiometer()
         last_active_time = millis();
       #endif //FEATURE_LCD_BACKLIGHT_AUTO_DIM
     }
+
+    #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
+      byte pot_value_farnsworth_read = pot_value_farnsworth();
+      if (((abs(pot_value_farnsworth_read - last_pot_farnsworth_read) * 10) > (farnsworth_pot_change_threshold * 10))) {
+        #ifdef DEBUG_POTENTIOMETER
+          debug_serial_port->print(F("check_potentiometer: farnsworth change: "));
+          debug_serial_port->print(pot_value_farnsworth_read);
+          debug_serial_port->print(F(" analog read: "));
+          debug_serial_port->println(analogRead(farnsworth_potentiometer));
+        #endif
+        configuration.wpm_farnsworth = pot_value_farnsworth_read;
+        config_dirty = 1;
+        last_pot_farnsworth_read = pot_value_farnsworth_read;
+        #ifdef FEATURE_DISPLAY
+          if (LCD_COLUMNS < 9){
+            lcd_center_print_timed("Frns " + String(configuration.wpm_farnsworth), 0, default_display_msg_delay);
+          } else {
+            lcd_center_print_timed("Farnsworth " + String(configuration.wpm_farnsworth) + " wpm", 0, default_display_msg_delay);
+          }
+        #endif //FEATURE_DISPLAY
+        #ifdef FEATURE_SLEEP
+          last_activity_time = millis();
+        #endif //FEATURE_SLEEP
+        #ifdef FEATURE_LCD_BACKLIGHT_AUTO_DIM
+          last_active_time = millis();
+        #endif //FEATURE_LCD_BACKLIGHT_AUTO_DIM
+      }
+    #endif //FEATURE_FARNSWORTH_POTENTIOMETER
   }
 }
 
 #endif
+//-------------------------------------------------------------------------------------------------------
+#ifdef FEATURE_FARNSWORTH_POTENTIOMETER
+// Returns the Farnsworth *character* speed in WPM set by the dedicated pot.
+// Full CCW maps to farnsworth_pot_low_value (0 by default), which disables
+// Farnsworth since send_dit()/send_dah() only apply it when
+// configuration.wpm_farnsworth > configuration.wpm.
+byte pot_value_farnsworth()
+{
+
+  static int last_pot_read = 0;
+  static byte return_value = 0;
+  int pot_read = analogRead(farnsworth_potentiometer);
+  if (abs(pot_read - last_pot_read) > potentiometer_reading_threshold ) {
+    return_value = map(pot_read, 0, pot_full_scale_reading, farnsworth_pot_low_value, farnsworth_pot_high_value);
+    last_pot_read = pot_read;
+  }
+  return return_value;
+
+}
+
+#endif //FEATURE_FARNSWORTH_POTENTIOMETER
+
 //-------------------------------------------------------------------------------------------------------
 #ifdef FEATURE_POTENTIOMETER
 byte pot_value_wpm()
@@ -13019,7 +13081,7 @@ void print_serial_help(PRIMARY_SERIAL_CLS * port_to_use,byte paged_help){
   #endif
   port_to_use->println(F("\\L##\t\t: Set weighting (50 = normal)"));
   #ifdef FEATURE_FARNSWORTH
-    port_to_use->println(F("\\M###\t\t: Set Farnsworth speed")); //Upper case to first letter only(WD9DMP)
+    port_to_use->println(F("\\M###\t\t: Set Farnsworth character speed (must exceed \\W speed; 0 = disabled)")); //Upper case to first letter only(WD9DMP)
   #endif
   if (paged_help) {serial_page_pause(port_to_use,10);}
   port_to_use->println(F("\\N\t\t: Toggle paddle reverse")); //Upper case to first letter only(WD9DMP)
@@ -14716,7 +14778,7 @@ void serial_set_farnsworth(PRIMARY_SERIAL_CLS * port_to_use) {
   int set_farnsworth_wpm = serial_get_number_input(3,-1,1000, port_to_use, RAISE_ERROR_MSG);
   if ((set_farnsworth_wpm > 0) || (set_farnsworth_wpm == 0)) {
     configuration.wpm_farnsworth = set_farnsworth_wpm;
-    port_to_use->write("\r\nSetting Farnsworth WPM to ");
+    port_to_use->write("\r\nSetting Farnsworth character WPM to ");
     port_to_use->println(set_farnsworth_wpm,DEC);
     config_dirty = 1;
   }
@@ -16414,12 +16476,16 @@ void serial_status(PRIMARY_SERIAL_CLS * port_to_use) {
     port_to_use->println(F("n"));
   }
   if (speed_mode == SPEED_NORMAL) {
-    port_to_use->print(F("WPM: "));
+    #ifdef FEATURE_FARNSWORTH
+      port_to_use->print(F("Effective WPM: "));
+    #else
+      port_to_use->print(F("WPM: "));
+    #endif //FEATURE_FARNSWORTH
     port_to_use->println(configuration.wpm,DEC);
     port_to_use->print(F("Command Mode WPM: "));
     port_to_use->println(configuration.wpm_command_mode,DEC);
     #ifdef FEATURE_FARNSWORTH
-      port_to_use->print(F("Farnsworth WPM: "));
+      port_to_use->print(F("Character WPM (Farnsworth): "));
       if (configuration.wpm_farnsworth < configuration.wpm) {
         port_to_use->println(F("Disabled")); //(WD9DMP)
       } else {
@@ -18799,6 +18865,12 @@ void initialize_potentiometer(){
     pot_wpm_high_value = initial_pot_wpm_high_value;
     last_pot_wpm_read = pot_value_wpm();
     configuration.pot_activated = 1;
+  #endif
+
+  #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
+    pinMode(farnsworth_potentiometer,INPUT);
+    last_pot_farnsworth_read = pot_value_farnsworth();
+    configuration.wpm_farnsworth = last_pot_farnsworth_read;
   #endif
 
 }

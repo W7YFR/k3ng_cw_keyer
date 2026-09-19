@@ -23,6 +23,10 @@
 
 #define potentiometer_enable_pin 0  // if defined, the potentiometer will be enabled only when this pin is held low; set to 0 to ignore this pin
 
+#ifdef FEATURE_FARNSWORTH_POTENTIOMETER
+  #define farnsworth_potentiometer A4  // Farnsworth character speed potentiometer (0 to 5 V) Use pot from 1k to 10k; must be an analog pin
+#endif //FEATURE_FARNSWORTH_POTENTIOMETER
+
 #ifdef FEATURE_BUTTONS
   #define analog_buttons_pin A1
   #define command_mode_active_led 0
