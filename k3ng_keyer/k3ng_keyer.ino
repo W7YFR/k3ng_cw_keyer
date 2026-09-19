@@ -2073,6 +2073,11 @@ byte send_buffer_status = SERIAL_SEND_BUFFER_NORMAL;
   byte dah_counter = 0;
 #endif //FEATURE_DEAD_OP_WATCHDOG
 
+#ifdef FEATURE_DIT_HOLD_RESET
+  byte dit_hold_counter = 0;      // consecutive dits sent so far in the current hold
+  byte dit_hold_gesture_flag = 0; // set on release if dit_hold_counter reached dit_hold_reset_count; cleared by whichever code consumes it
+#endif //FEATURE_DIT_HOLD_RESET
+
 #ifdef FEATURE_BUTTONS
   #ifdef OPTION_REVERSE_BUTTON_ORDER
     ButtonArray button_array(analog_buttons_pin, analog_buttons_number_of_buttons, true);
@@ -2591,6 +2596,14 @@ void loop()
       check_paddles();
       service_send_buffer(PRINTCHAR);
       service_display();
+
+      #ifdef FEATURE_DIT_HOLD_RESET
+        if (dit_hold_gesture_flag) {
+          dit_hold_gesture_flag = 0;
+          lcd_clear();
+          display_scroll_reset();
+        }
+      #endif //FEATURE_DIT_HOLD_RESET
     #endif
 
     #ifdef FEATURE_CW_DECODER
@@ -6771,6 +6784,11 @@ void check_dit_paddle()
         dah_counter = 0;
       }
     #endif
+    #ifdef FEATURE_DIT_HOLD_RESET
+      if (dit_buffer == 0) {
+        dit_hold_counter++;
+      }
+    #endif //FEATURE_DIT_HOLD_RESET
     dit_buffer = 1;
 
     #if defined(OPTION_WINKEY_SEND_BREAKIN_STATUS_BYTE) && defined(FEATURE_WINKEY_EMULATION)
@@ -6807,6 +6825,21 @@ void check_dit_paddle()
     #endif
     clear_send_buffer();
   }
+  #ifdef FEATURE_DIT_HOLD_RESET
+    else {   // dit paddle is up
+      if (dit_hold_counter >= dit_hold_reset_count) {
+        dit_hold_gesture_flag = 1;
+        // no real character is this many dits in a row - discard it instead of letting it decode to '*'
+        #ifdef FEATURE_PADDLE_ECHO
+          paddle_echo_buffer = 0;
+        #endif //FEATURE_PADDLE_ECHO
+        #ifdef FEATURE_WINKEY_EMULATION
+          winkey_paddle_echo_buffer = 0;
+        #endif //FEATURE_WINKEY_EMULATION
+      }
+      dit_hold_counter = 0;
+    }
+  #endif //FEATURE_DIT_HOLD_RESET
 
 
 
@@ -6841,6 +6874,9 @@ void check_dah_paddle()
         dit_counter = 0;
       }
     #endif
+    #ifdef FEATURE_DIT_HOLD_RESET
+      dit_hold_counter = 0;
+    #endif //FEATURE_DIT_HOLD_RESET
     dah_buffer = 1;
 
     #if defined(OPTION_WINKEY_SEND_BREAKIN_STATUS_BYTE) && defined(FEATURE_WINKEY_EMULATION)
@@ -17850,6 +17886,8 @@ void program_memory(int memory_number)
          }
        #endif //FEATURE_MEMORY_MACROS
 
+       byte restart_recording = 0;
+
        #ifdef FEATURE_BUTTONS
          while (analogbuttonread(0)) {    // hit the button to get out of command mode if no paddle was hit
            loop1 = 0;
@@ -17857,22 +17895,34 @@ void program_memory(int memory_number)
          }
          if (analogbuttonread(memory_button_index)) {   // hit the same button that started this recording - start over
            while (analogbuttonread(memory_button_index)) {}  // wait for release so it doesn't re-trigger
-           memory_location_index = 0;
-           space_count = 0;
-           #ifdef FEATURE_MEMORY_MACROS
-             macro_flag = 0;
-           #endif //FEATURE_MEMORY_MACROS
-           cwchar = 0;
-           paddle_hit = 0;
-           dit_buffer = 0;
-           dah_buffer = 0;
-           loop1 = 0;
-           boop();
-           #ifdef FEATURE_DISPLAY
-             lcd_center_print_timed(lcd_print_string, 0, default_display_msg_delay);
-           #endif //FEATURE_DISPLAY
+           restart_recording = 1;
          }
        #endif
+
+       #ifdef FEATURE_DIT_HOLD_RESET
+         if (dit_hold_gesture_flag) {
+           dit_hold_gesture_flag = 0;
+           restart_recording = 1;
+         }
+       #endif //FEATURE_DIT_HOLD_RESET
+
+       if (restart_recording) {
+         memory_location_index = 0;
+         space_count = 0;
+         #ifdef FEATURE_MEMORY_MACROS
+           macro_flag = 0;
+         #endif //FEATURE_MEMORY_MACROS
+         cwchar = 0;
+         paddle_hit = 0;
+         dit_buffer = 0;
+         dah_buffer = 0;
+         loop1 = 0;
+         boop();
+         #ifdef FEATURE_DISPLAY
+           lcd_center_print_timed(lcd_print_string, 0, default_display_msg_delay);
+           display_scroll_reset();
+         #endif //FEATURE_DISPLAY
+       }
     }  //loop1
 
     if (cwchar != 9) {

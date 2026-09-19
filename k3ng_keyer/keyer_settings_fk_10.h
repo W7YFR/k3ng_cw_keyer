@@ -92,6 +92,7 @@
 #define default_wordsworth_repetition 1
 #define serial_program_memory_buffer_size 500
 #define eeprom_write_time_ms 30000
+#define dit_hold_reset_count 10  // consecutive dits to hold (then release) to trigger FEATURE_DIT_HOLD_RESET
 
 #ifdef FEATURE_BUTTONS
   #define analog_buttons_number_of_buttons 4
