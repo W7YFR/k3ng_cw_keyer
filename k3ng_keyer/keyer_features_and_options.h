@@ -12,8 +12,8 @@
 // #define FEATURE_BEACON_SETTING         // Go into beacon mode at boot up if EEPROM setting is enabled (\_ CLI Command)
 #define FEATURE_TRAINING_COMMAND_LINE_INTERFACE
 #define FEATURE_POTENTIOMETER          // do not enable unless you have a potentiometer connected, otherwise noise will falsely trigger wpm changes
-// #define EXTRA_BUTTONS                  // adds one or more analog buttons beyond the command + memory buttons, for custom actions (see check_buttons() in k3ng_keyer.ino) - requires FEATURE_BUTTONS
-// #define NUMBER_OF_EXTRA_BUTTONS 1      // how many extra buttons to add to the button ladder when EXTRA_BUTTONS is defined
+#define EXTRA_BUTTONS                  // adds one or more analog buttons beyond the command + memory buttons, for custom actions (see check_buttons() in k3ng_keyer.ino) - requires FEATURE_BUTTONS
+#define NUMBER_OF_EXTRA_BUTTONS 2      // how many extra buttons to add to the button ladder when EXTRA_BUTTONS is defined
 #define FEATURE_TRAINING_PADDLE        // makes the word/callsign/QSO training tables available without FEATURE_TRAINING_COMMAND_LINE_INTERFACE, for paddle-only (no serial terminal) echo practice in Command Mode
 #define OPTION_ECHO_PRACTICE_DOUBLE_CORRECT_AFTER_MISS  // in echo practice, once you miss a word you must get it right twice in a row before moving on to the next word
 // #define FEATURE_SIDETONE_SWITCH        // adds switch control for the sidetone output. requires an external toggle switch (assigned to an arduino pin - see keyer_pin_settings.h). 
