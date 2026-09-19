@@ -1923,6 +1923,9 @@ uint16_t memory_area_end = 0;
   byte lcd_scroll_flag = 0;
   byte lcd_paddle_echo = 1;
   byte lcd_send_echo = 1;
+  byte display_scroll_column_pointer = 0;
+  byte display_scroll_row_pointer = 0;
+  byte display_scroll_holding_space = 0;
 #endif //FEATURE_DISPLAY
 
 #ifdef DEBUG_VARIABLE_DUMP
@@ -3907,16 +3910,36 @@ void service_display() {
 }
 #endif
 
+//-------------------------------------------------------------------------------------------------------
 
+#ifdef FEATURE_OLED_SSD1306
+void ssd1306_toggle_display() {
+  static boolean display_is_on = 1;
+  lcd.ssd1306WriteCmd(display_is_on ? SSD1306_DISPLAYOFF : SSD1306_DISPLAYON);
+  display_is_on = !display_is_on;
+}
+
+void ssd1306_clear_display() {
+  lcd_clear();
+  display_scroll_reset();
+}
+#endif //FEATURE_OLED_SSD1306
 
 //-------------------------------------------------------------------------------------------------------
 
 #ifdef FEATURE_DISPLAY
+void display_scroll_reset() {
+  for (byte x = 0; x < LCD_ROWS; x++) {
+    lcd_scroll_buffer[x] = "";
+  }
+  lcd_scroll_buffer_dirty = 0;
+  display_scroll_column_pointer = 0;
+  display_scroll_row_pointer = 0;
+  display_scroll_holding_space = 0;
+}
+
 void display_scroll_print_char(char charin){
 
-  static byte column_pointer = 0;
-  static byte row_pointer = 0;
-  static byte holding_space = 0;
   byte x = 0;
 
   #ifdef DEBUG_DISPLAY_SCROLL_PRINT_CHAR
@@ -3944,46 +3967,46 @@ void display_scroll_print_char(char charin){
   }
 
   if (charin == ' '){
-    holding_space = 1;
+    display_scroll_holding_space = 1;
     return;
   }
 
-  if (holding_space){   // ok, I admit this is a hack.  Hold on to spaces and don't scroll until the next char comes in...
-    if (column_pointer > (LCD_COLUMNS-1)) {
-      row_pointer++;
-      column_pointer = 0;
-      if (row_pointer > (LCD_ROWS-1)) {
+  if (display_scroll_holding_space){   // ok, I admit this is a hack.  Hold on to spaces and don't scroll until the next char comes in...
+    if (display_scroll_column_pointer > (LCD_COLUMNS-1)) {
+      display_scroll_row_pointer++;
+      display_scroll_column_pointer = 0;
+      if (display_scroll_row_pointer > (LCD_ROWS-1)) {
         for (x = 0; x < (LCD_ROWS-1); x++) {
           lcd_scroll_buffer[x] = lcd_scroll_buffer[x+1];
         }
         lcd_scroll_buffer[x] = "";
-        row_pointer--;
+        display_scroll_row_pointer--;
         lcd_scroll_flag = 1;
       }
     }
-    if (column_pointer > 0){ // don't put a space in the first column
-      lcd_scroll_buffer[row_pointer].concat(' ');
-      column_pointer++;
+    if (display_scroll_column_pointer > 0){ // don't put a space in the first column
+      lcd_scroll_buffer[display_scroll_row_pointer].concat(' ');
+      display_scroll_column_pointer++;
     }
-    holding_space = 0;
+    display_scroll_holding_space = 0;
   }
 
 
 
-  if (column_pointer > (LCD_COLUMNS-1)) {
-    row_pointer++;
-    column_pointer = 0;
-    if (row_pointer > (LCD_ROWS-1)) {
+  if (display_scroll_column_pointer > (LCD_COLUMNS-1)) {
+    display_scroll_row_pointer++;
+    display_scroll_column_pointer = 0;
+    if (display_scroll_row_pointer > (LCD_ROWS-1)) {
       for (x = 0; x < (LCD_ROWS-1); x++) {
         lcd_scroll_buffer[x] = lcd_scroll_buffer[x+1];
       }
       lcd_scroll_buffer[x] = "";
-      row_pointer--;
+      display_scroll_row_pointer--;
       lcd_scroll_flag = 1;
     }
   }
-  lcd_scroll_buffer[row_pointer].concat(charin);
-  column_pointer++;
+  lcd_scroll_buffer[display_scroll_row_pointer].concat(charin);
+  display_scroll_column_pointer++;
 
 
   lcd_scroll_buffer_dirty = 1;
