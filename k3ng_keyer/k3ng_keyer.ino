@@ -1540,13 +1540,16 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 #include "keyer_dependencies.h"
 #include "keyer_debug.h"
 
-// Forward declarations - service_straight_key() is called from loop() before its
-// definition, and the Arduino/PlatformIO auto-prototype generator does not emit a
-// prototype for it (it lives inside a conditional block), so declare it explicitly.
+// Forward declarations - these functions are called before their definitions, and the
+// Arduino/PlatformIO auto-prototype generator does not emit prototypes for functions
+// defined inside conditional blocks, so declare them explicitly.
 #if defined(FEATURE_STRAIGHT_KEY_ANY)
   byte straight_key_down();
   long service_straight_key();
 #endif //FEATURE_STRAIGHT_KEY_ANY
+#if defined(OPTION_PROSIGN_SUPPORT)
+  char * convert_prosign(byte prosign_code);
+#endif //OPTION_PROSIGN_SUPPORT
 
 #if defined(HARDWARE_OPENCWKEYER_MK2)
   #include "keyer_pin_settings_opencwkeyer_mk2.h"
