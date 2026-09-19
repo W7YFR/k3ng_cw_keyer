@@ -1540,6 +1540,14 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 #include "keyer_dependencies.h"
 #include "keyer_debug.h"
 
+// Forward declarations - service_straight_key() is called from loop() before its
+// definition, and the Arduino/PlatformIO auto-prototype generator does not emit a
+// prototype for it (it lives inside a conditional block), so declare it explicitly.
+#if defined(FEATURE_STRAIGHT_KEY_ANY)
+  byte straight_key_down();
+  long service_straight_key();
+#endif //FEATURE_STRAIGHT_KEY_ANY
+
 #if defined(HARDWARE_OPENCWKEYER_MK2)
   #include "keyer_pin_settings_opencwkeyer_mk2.h"
   #include "keyer_settings_opencwkeyer_mk2.h"
@@ -2645,7 +2653,7 @@ void loop()
       service_paddle_echo();
     #endif
 
-    #ifdef FEATURE_STRAIGHT_KEY
+    #ifdef FEATURE_STRAIGHT_KEY_ANY
       service_straight_key();
     #endif
 
@@ -3068,13 +3076,29 @@ void service_keypad(){
 
 //-------------------------------------------------------------------------------------------------------
 
-#if defined(FEATURE_STRAIGHT_KEY)
+#if defined(FEATURE_STRAIGHT_KEY_ANY)
+  // Returns 1 while the straight key is "down", from whichever source is enabled:
+  // a dedicated key on pin_straight_key (FEATURE_STRAIGHT_KEY), and/or the dit paddle
+  // when the keyer is in STRAIGHT mode (FEATURE_STRAIGHT_KEY_PADDLE).  paddle_mode is
+  // honored so the physical dit lever is used regardless of paddle reverse.
+  byte straight_key_down(){
+    #if defined(FEATURE_STRAIGHT_KEY)
+      if (digitalRead(pin_straight_key) == STRAIGHT_KEY_ACTIVE_STATE){ return 1; }
+    #endif
+    #if defined(FEATURE_STRAIGHT_KEY_PADDLE)
+      if (configuration.keyer_mode == STRAIGHT){
+        if (paddle_pin_read((configuration.paddle_mode == PADDLE_NORMAL) ? paddle_left : paddle_right) == LOW){ return 1; }
+      }
+    #endif
+    return 0;
+  }
+
   long service_straight_key(){
 
     long decode_character = 0;
     static byte last_straight_key_state = 0;
 
-    if (digitalRead(pin_straight_key) == STRAIGHT_KEY_ACTIVE_STATE){
+    if (straight_key_down()){
       if (!last_straight_key_state){
         sending_mode = MANUAL_SENDING;
         tx_and_sidetone_key(1);
@@ -7578,9 +7602,9 @@ void loop_element_lengths(float lengths, float additional_time_ms, int speed_wpm
         }
       #endif
 
-      #ifdef FEATURE_STRAIGHT_KEY
+      #ifdef FEATURE_STRAIGHT_KEY_ANY
         service_straight_key();
-      #endif //FEATURE_STRAIGHT_KEY
+      #endif //FEATURE_STRAIGHT_KEY_ANY
 
 
       #if defined(FEATURE_WEB_SERVER)
@@ -8022,6 +8046,18 @@ void command_mode() {
           #endif
           send_char(command_mode_acknowledgement_character, 0);
           break;
+
+        #if defined(FEATURE_STRAIGHT_KEY_ANY)
+          case 111212: // <SK> prosign - switch to Straight Key mode (dit paddle keys directly)
+          configuration.keyer_mode = STRAIGHT;
+          keyer_mode_before = STRAIGHT;
+          config_dirty = 1;
+          #ifdef FEATURE_DISPLAY
+            lcd_center_print_timed("Straight Key", 0, default_display_msg_delay);
+          #endif
+          send_char(command_mode_acknowledgement_character, 0);
+          break;
+        #endif //FEATURE_STRAIGHT_KEY_ANY
 
 	  case 1111:   // H - set weighting and dah to dit ratio to defaults
           configuration.weighting = default_weighting;
@@ -8492,6 +8528,16 @@ void command_mode() {
               #endif                                                     // FEATURE_DISPLAY
               send_char('G',KEYER_NORMAL);
               break;
+            #if defined(FEATURE_STRAIGHT_KEY_ANY)
+            case STRAIGHT:
+              #ifdef FEATURE_DISPLAY
+                lcd_center_print_timed("mode  Straight", 1, default_display_msg_delay);
+                delay(250);
+              #endif                                                     // FEATURE_DISPLAY
+              send_char('S',KEYER_NORMAL);
+              send_char('K',KEYER_NORMAL);
+              break;
+            #endif //FEATURE_STRAIGHT_KEY_ANY
           }                                                            // switch(keyer_mode_before)
           send_char(' ',KEYER_NORMAL);
           send_char(' ',KEYER_NORMAL);
@@ -9798,14 +9844,23 @@ void service_dit_dah_buffers()
       #endif
     } else {
       if (configuration.keyer_mode == STRAIGHT) {
-        if (dit_buffer) {
+        #if defined(FEATURE_STRAIGHT_KEY_ANY)
+          // service_straight_key() owns keying (and decoding) for STRAIGHT mode; just
+          // discard the paddle buffers here so they don't leak into other handlers.
           dit_buffer = 0;
-          sending_mode = MANUAL_SENDING;
-          tx_and_sidetone_key(1);
-        } else {
-          sending_mode = MANUAL_SENDING;
-          tx_and_sidetone_key(0);
-        }
+          dah_buffer = 0;
+        #else
+          // No straight-key service compiled (e.g. entered via boot-time hold of the dah
+          // paddle) - fall back to simple direct keying off the dit buffer.
+          if (dit_buffer) {
+            dit_buffer = 0;
+            sending_mode = MANUAL_SENDING;
+            tx_and_sidetone_key(1);
+          } else {
+            sending_mode = MANUAL_SENDING;
+            tx_and_sidetone_key(0);
+          }
+        #endif
         #ifdef FEATURE_DEAD_OP_WATCHDOG
           dit_counter = 0;
         #endif
@@ -13071,6 +13126,9 @@ void print_serial_help(PRIMARY_SERIAL_CLS * port_to_use,byte paged_help){
   port_to_use->println(F("\\E####\t\t: Set serial number to ####"));
   port_to_use->println(F("\\F####\t\t: Set sidetone to #### hz"));
   port_to_use->println(F("\\G\t\t: Switch to bug mode")); //Upper case to first letter only(WD9DMP)
+  #if defined(FEATURE_STRAIGHT_KEY_ANY)
+  port_to_use->println(F("\\#\t\t: Switch to straight key mode"));
+  #endif //FEATURE_STRAIGHT_KEY_ANY
   #ifdef FEATURE_HELL
     port_to_use->println(F("\\H\t\t: Toggle CW / Hell mode"));
   #endif
@@ -13261,6 +13319,9 @@ void process_serial_command(PRIMARY_SERIAL_CLS * port_to_use) {
     case 'E': serial_set_serial_number(port_to_use); break;                                   // E - set serial number
     case 'F': serial_set_sidetone_freq(port_to_use); break;                                   // F - set sidetone frequency
     case 'G': configuration.keyer_mode = BUG; config_dirty = 1; port_to_use->println(F("\r\nBug")); break;              // G - Bug mode
+    #if defined(FEATURE_STRAIGHT_KEY_ANY)
+    case '#': configuration.keyer_mode = STRAIGHT; config_dirty = 1; port_to_use->println(F("\r\nStraight Key")); break; // # - Straight Key mode (dit paddle keys directly)
+    #endif //FEATURE_STRAIGHT_KEY_ANY
     #ifdef FEATURE_HELL
       case 'H': // H - Hell mode
         if ((char_send_mode == CW) || (char_send_mode == AMERICAN_MORSE)){
