@@ -1974,7 +1974,14 @@ uint16_t memory_area_end = 0;
   char vband_link_rx_frame[VBAND_LINK_MAX_FRAME + 1];
   byte vband_link_rx_length = 0;
   byte vband_link_in_frame = 0;
+  char vband_link_speaker[9] = "";                  // tag of whoever the display's current line belongs to
 #endif //FEATURE_VBAND_LINK
+
+#if defined(FEATURE_VBAND_LINK) && defined(FEATURE_DISPLAY)
+  #define VBAND_LINK_MY_SENDING() vband_link_set_speaker(VBAND_LINK_MY_TAG)   // our own sending is about to be echoed on the display
+#else
+  #define VBAND_LINK_MY_SENDING()
+#endif
 
 #ifdef DEBUG_VARIABLE_DUMP
   long dit_start_time;
@@ -3355,6 +3362,7 @@ void service_keypad(){
 
         #if defined(FEATURE_DISPLAY) && defined(FEATURE_STRAIGHT_KEY_ECHO)
           if (cli_straight_key_echo){
+            VBAND_LINK_MY_SENDING();
             if (cw_ascii_temp){
               display_scroll_print_char(cw_ascii_temp);
             } else {
@@ -3378,7 +3386,10 @@ void service_keypad(){
         #endif //defined(FEATURE_SERIAL) && defined(FEATURE_COMMAND_LINE_INTERFACE)
 
         #if defined(FEATURE_DISPLAY) && defined(FEATURE_STRAIGHT_KEY_ECHO)
-          if (cli_straight_key_echo){display_scroll_print_char(convert_cw_number_to_ascii(decode_character));}
+          if (cli_straight_key_echo){
+            VBAND_LINK_MY_SENDING();
+            display_scroll_print_char(convert_cw_number_to_ascii(decode_character));
+          }
         #endif //FEATURE_DISPLAY
 
       #endif //OPTION_PROSIGN_SUPPORT
@@ -4114,6 +4125,14 @@ void display_scroll_print_char(char charin){
     display_request_paint();
   }
 
+  if (charin == '\n'){                // start a new line (nothing to do if the current one is empty)
+    display_scroll_holding_space = 0;
+    if (display_scroll_column_pointer > 0) {
+      display_scroll_column_pointer = LCD_COLUMNS;     // the next character wraps to a new line
+    }
+    return;
+  }
+
   if (charin == ' '){
     display_scroll_holding_space = 1;
     return;
@@ -4297,6 +4316,8 @@ void vband_link_set_ready(byte ready) {
 
   if (ready == vband_link_ready) {return;}
 
+  vband_link_speaker[0] = 0;                       // the next line gets its tag again
+
   if (ready) {
     vband_link_ready = 1;
     vband_link_tx_before = configuration.current_tx;
@@ -4378,6 +4399,8 @@ void vband_link_handle_frame() {
   #ifdef FEATURE_DISPLAY
     if (strcmp(vband_link_rx_frame, "ST") == 0) {
       vband_link_show_status(fields);
+    } else if (strcmp(vband_link_rx_frame, "RX") == 0) {
+      vband_link_show_received(fields);
     }
   #endif //FEATURE_DISPLAY
 
@@ -4386,6 +4409,42 @@ void vband_link_handle_frame() {
 //-------------------------------------------------------------------------------------------------------
 
 #ifdef FEATURE_DISPLAY
+void vband_link_set_speaker(const char *tag) {
+
+  // While VBand traffic is being shown, each change of who's sending starts a new display line with "TAG>".
+  // Otherwise (no adapter) the display scrolls as usual.
+
+  if ((!vband_link_ready) || (strncmp(tag, vband_link_speaker, sizeof(vband_link_speaker) - 1) == 0)) {return;}
+
+  strncpy(vband_link_speaker, tag, sizeof(vband_link_speaker) - 1);
+  vband_link_speaker[sizeof(vband_link_speaker) - 1] = 0;
+  display_scroll_print_char('\n');
+  for (byte x = 0; vband_link_speaker[x]; x++) {
+    display_scroll_print_char(vband_link_speaker[x]);
+  }
+  display_scroll_print_char('>');
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_show_received(char *fields) {
+
+  // "RX,<tag>,<text>" - text decoded by the adapter from another VBand user's sending (just the tag on
+  // no-decode channels)
+
+  char *text = strchr(fields, ',');
+
+  if (text) {*text++ = 0;} else {text = fields + strlen(fields);}
+  vband_link_set_speaker(fields);
+  while (*text) {
+    display_scroll_print_char(*text++);
+  }
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 void vband_link_show_status(char *fields) {
 
   // "ST,<ms>,<row 0>[|<row 1>...]" - a timed status screen, rows already shortened by the adapter
@@ -11097,6 +11156,7 @@ void service_send_buffer(byte no_print)
 
         #ifdef FEATURE_DISPLAY
           if (lcd_send_echo) {
+            if (send_buffer_array[0] != ' ') {VBAND_LINK_MY_SENDING();}
             display_scroll_print_char(send_buffer_array[0]);
             service_display();
           }
@@ -14702,6 +14762,7 @@ void service_paddle_echo()
 
     #ifdef FEATURE_DISPLAY
       if (lcd_paddle_echo){
+        VBAND_LINK_MY_SENDING();
         #if defined(OPTION_PROSIGN_SUPPORT)
           #ifndef OPTION_DISPLAY_NON_ENGLISH_EXTENSIONS
             byte_temp = convert_cw_number_to_ascii(paddle_echo_buffer);
@@ -17705,6 +17766,7 @@ void display_serial_number_character(char snumchar){
 #endif // (FEATURE_SERIAL)
 #ifdef FEATURE_DISPLAY
   if (lcd_send_echo) {
+    VBAND_LINK_MY_SENDING();
     display_scroll_print_char(snumchar);
     service_display();
     }
@@ -17881,6 +17943,7 @@ byte play_memory(byte memory_number) {
 
             #ifdef FEATURE_DISPLAY
               if (lcd_send_echo) {
+                VBAND_LINK_MY_SENDING();
                 #if defined(OPTION_PROSIGN_SUPPORT)
                     if ((eeprom_temp > PROSIGN_START) && (eeprom_temp < PROSIGN_END)){
                       display_scroll_print_char(prosign_temp[0]);
