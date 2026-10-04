@@ -1896,6 +1896,9 @@ uint16_t memory_area_end = 0;
   #ifndef display_paint_budget_us
     #define display_paint_budget_us 1000   // max time service_display() spends drawing per call, so redraws never stall paddle handling
   #endif
+  #ifndef i2c_display_timeout_us
+    #define i2c_display_timeout_us 3000    // give up on an I2C display transfer after this long instead of hanging the keyer (AVR)
+  #endif
 #endif //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_ADAFRUIT_I2C
@@ -3825,6 +3828,18 @@ void service_display() {
 
   #ifdef DEBUG_DISPLAY_TIMING
     unsigned long service_display_start = micros();
+  #endif
+
+  #if defined(TwoWire_h) && defined(ARDUINO_ARCH_AVR)
+    if (Wire.getWireTimeoutFlag()) {             // an I2C transfer was abandoned, so the screen may be garbled
+      Wire.clearWireTimeoutFlag();
+      for (byte y = 0; y < LCD_ROWS; y++) {
+        for (byte x = 0; x < LCD_COLUMNS; x++) {
+          lcd_shown[y][x] = 0;                   // never what a cell should show, so every cell is redrawn
+        }
+      }
+      display_request_paint();
+    }
   #endif
 
   if ((lcd_status == LCD_TIMED_MESSAGE) && (millis() > lcd_timed_message_clear_time)) {
@@ -18964,6 +18979,13 @@ void initialize_display(){
         #endif
         lcd.begin(LCD_COLUMNS, LCD_ROWS);
      #endif
+    #endif
+
+    #if defined(TwoWire_h) && defined(ARDUINO_ARCH_AVR)
+      // Out of the box the AVR Wire library waits forever on a stuck I2C bus (noise, a loose wire), which
+      // freezes the whole keyer until it's reset. With a timeout it abandons the transfer and resets the
+      // bus instead; service_display() then redraws the screen.
+      Wire.setWireTimeout(i2c_display_timeout_us, true);
     #endif
     
     #ifdef FEATURE_LCD_ADAFRUIT_I2C
