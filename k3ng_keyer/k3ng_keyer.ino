@@ -4249,7 +4249,42 @@ void vband_link_handle_frame() {
   vband_link_last_frame_time = millis();
   vband_link_set_up(1);
 
+  #ifdef FEATURE_DISPLAY
+    if (strcmp(vband_link_rx_frame, "ST") == 0) {
+      vband_link_show_status(fields);
+    }
+  #endif //FEATURE_DISPLAY
+
 }
+
+//-------------------------------------------------------------------------------------------------------
+
+#ifdef FEATURE_DISPLAY
+void vband_link_show_status(char *fields) {
+
+  // "ST,<ms>,<row 0>[|<row 1>...]" - a timed status screen, rows already shortened by the adapter
+
+  char *row_text = strchr(fields, ',');
+  unsigned int duration = atoi(fields);
+  char *row_end;
+
+  if (row_text == NULL) {return;}
+  row_text++;
+  if ((duration == 0) || (duration > 60000)) {duration = default_display_msg_delay;}
+
+  if (lcd_status == LCD_TIMED_MESSAGE) {
+    lcd_status = lcd_previous_status;          // start a fresh screen rather than layering onto the current message
+  }
+
+  for (byte row = 0; (row < LCD_ROWS) && row_text; row++) {
+    row_end = strchr(row_text, '|');
+    if (row_end) {*row_end = 0;}
+    lcd_center_print_timed(row_text, row, duration);
+    row_text = row_end ? (row_end + 1) : NULL;
+  }
+
+}
+#endif //FEATURE_DISPLAY
 
 //-------------------------------------------------------------------------------------------------------
 
