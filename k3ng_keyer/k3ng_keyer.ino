@@ -2183,6 +2183,9 @@ byte send_buffer_status = SERIAL_SEND_BUFFER_NORMAL;
 
 #if defined(FEATURE_OLED_SSD1306)
   SSD1306AsciiWire lcd;
+  #ifndef oled_ssd1306_font
+    #define oled_ssd1306_font fixed_bold10x15
+  #endif
 #endif
 
 #if defined(FEATURE_USB_KEYBOARD) || defined(FEATURE_USB_MOUSE)
@@ -3852,7 +3855,7 @@ void lcd_set_cell_cursor(byte col, byte row) {
   #ifndef FEATURE_OLED_SSD1306
     lcd.setCursor(col,row);
   #else
-    lcd.setCursor(col*11,row*2);
+    lcd.setCursor(col*(lcd.fontWidth()+lcd.letterSpacing()),row*lcd.fontRows());   // cell size follows oled_ssd1306_font
   #endif
 }
 
@@ -18949,7 +18952,7 @@ void initialize_display(){
       Wire.begin();
       Wire.setClock(400000L);
       lcd.begin(&Adafruit128x64, oled_i2c_address_ssd1306);
-      lcd.setFont(fixed_bold10x15);
+      lcd.setFont(oled_ssd1306_font);
     #else
       #if defined(FEATURE_LCD_SAINSMART_I2C) || defined(FEATURE_LCD_I2C_FDEBRABANDER)
         lcd.begin();
