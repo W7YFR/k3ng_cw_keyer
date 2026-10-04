@@ -80,7 +80,7 @@
 #define dit_hold_reset_count 10  // consecutive dits to hold (then release) to trigger FEATURE_DIT_HOLD_RESET
 
 #ifdef FEATURE_BUTTONS
-  #define number_of_memory_buttons 3  // hardware memory buttons, not counting the command button or the extra buttons (if enabled)
+  #define number_of_memory_buttons 7  // hardware memory buttons, not counting the command button or the extra buttons (if enabled)
   #ifdef EXTRA_BUTTONS
     #define number_of_non_memory_buttons (1 + NUMBER_OF_EXTRA_BUTTONS)  // command button + extra buttons
     // index of the first extra button within button_array / analogbuttontemp - extra buttons are always the last buttons in the ladder
