@@ -4401,6 +4401,8 @@ void vband_link_handle_frame() {
       vband_link_show_status(fields);
     } else if (strcmp(vband_link_rx_frame, "RX") == 0) {
       vband_link_show_received(fields);
+    } else if (strcmp(vband_link_rx_frame, "SYS") == 0) {
+      vband_link_show_system(fields);
     }
   #endif //FEATURE_DISPLAY
 
@@ -4440,6 +4442,20 @@ void vband_link_show_received(char *fields) {
   while (*text) {
     display_scroll_print_char(*text++);
   }
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_show_system(char *text) {
+
+  // "SYS,<text>" - a line of its own in the scrolling conversation, e.g. someone joining or leaving
+
+  display_scroll_print_char('\n');
+  while (*text) {
+    display_scroll_print_char(*text++);
+  }
+  vband_link_speaker[0] = 0;                       // whoever sends next starts a new tagged line
 
 }
 
