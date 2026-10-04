@@ -1923,6 +1923,9 @@ uint16_t memory_area_end = 0;
 #ifdef FEATURE_DISPLAY
   enum lcd_statuses {LCD_CLEAR, LCD_REVERT, LCD_TIMED_MESSAGE, LCD_SCROLL_MSG};
   #define default_display_msg_delay 1000
+  #ifndef display_paint_budget_us
+    #define display_paint_budget_us 1000   // max time service_display() spends drawing per call, so redraws never stall paddle handling
+  #endif
 #endif //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_ADAFRUIT_I2C
@@ -1948,9 +1951,11 @@ uint16_t memory_area_end = 0;
   byte lcd_status = LCD_CLEAR;
   unsigned long lcd_timed_message_clear_time = 0;
   byte lcd_previous_status = LCD_CLEAR;
-  byte lcd_scroll_buffer_dirty = 0;
   String lcd_scroll_buffer[LCD_ROWS];
-  byte lcd_scroll_flag = 0;
+  String lcd_timed_buffer[LCD_ROWS];           // rows of the current timed message (lcd_center_print_timed)
+  char lcd_shown[LCD_ROWS][LCD_COLUMNS];       // what is actually drawn on the display right now, cell by cell
+  byte lcd_paint_pending = 0;
+  unsigned int lcd_paint_clean_cells = 0;      // cells checked by display_paint() since it last drew one
   byte lcd_paddle_echo = 1;
   byte lcd_send_echo = 1;
   byte display_scroll_column_pointer = 0;
@@ -3884,96 +3889,146 @@ void service_display() {
   debug_serial_port->println(F("loop: entering service_display"));
   #endif
 
-  #define SCREEN_REFRESH_IDLE 0
-  #define SCREEN_REFRESH_INIT 1
-  #define SCREEN_REFRESH_IN_PROGRESS 2
+  #ifdef DEBUG_DISPLAY_TIMING
+    unsigned long service_display_start = micros();
+  #endif
 
-  static byte x = 0;
-  static byte y = 0;
-
-  static byte screen_refresh_status = SCREEN_REFRESH_IDLE;
-
-  if (screen_refresh_status == SCREEN_REFRESH_INIT){
-    lcd.setCursor(0,0);
-    y = 0;
-    x = 0;
-    screen_refresh_status = SCREEN_REFRESH_IN_PROGRESS;
-    return;
+  if ((lcd_status == LCD_TIMED_MESSAGE) && (millis() > lcd_timed_message_clear_time)) {
+    lcd_status = LCD_REVERT;
   }
 
-  if (screen_refresh_status == SCREEN_REFRESH_IN_PROGRESS){
-    if (x > lcd_scroll_buffer[y].length()){
-      y++;
-      if (y >= LCD_ROWS){
-        screen_refresh_status = SCREEN_REFRESH_IDLE;
-        lcd_scroll_buffer_dirty = 0;
-        return;
-      } else {
-         x = 0;
-         #ifndef FEATURE_OLED_SSD1306
-         lcd.setCursor(0,y);
-         #else
-         lcd.setCursor(0,y*2);
-         #endif
-      }
-    } else {
-      if (lcd_scroll_buffer[y].charAt(x) > 0){
-        #ifdef FEATURE_LCD_BACKLIGHT_AUTO_DIM
-          lcd.backlight();
-        #endif  // FEATURE_LCD_BACKLIGHT_AUTO_DIM
-        lcd.print(lcd_scroll_buffer[y].charAt(x));
-      }
-      x++;
-    }
+  if (lcd_status == LCD_REVERT) {
+    lcd_status = lcd_previous_status;
+    display_request_paint();
   }
 
-  if (screen_refresh_status == SCREEN_REFRESH_IDLE){
-    if (lcd_status == LCD_REVERT) {
-      lcd_status = lcd_previous_status;
-      switch (lcd_status) {
-        case LCD_CLEAR: lcd_clear(); break;
-        case LCD_SCROLL_MSG:
-          lcd.clear();
-          // for (x = 0;x < LCD_ROWS;x++){
-          //   //clear_display_row(x);
-          //   lcd.setCursor(0,x);
-          //   lcd.print(lcd_scroll_buffer[x]);
-          // }
-          screen_refresh_status = SCREEN_REFRESH_INIT;
-          lcd_scroll_flag = 0;
-          //lcd_scroll_buffer_dirty = 0;
-          break;
-      }
-    } else {
-      switch (lcd_status) {
-        case LCD_CLEAR : break;
-        case LCD_TIMED_MESSAGE:
-          if (millis() > lcd_timed_message_clear_time) {
-            lcd_status = LCD_REVERT;
-          }
-        case LCD_SCROLL_MSG:
-          if (lcd_scroll_buffer_dirty) {
-            if (lcd_scroll_flag) {
-              lcd.clear();
-              lcd_scroll_flag = 0;
-            }
-            // for (x = 0;x < LCD_ROWS;x++){
-            //   //clear_display_row(x);
-            //   lcd.setCursor(0,x);
-            //   lcd.print(lcd_scroll_buffer[x]);
-            // }
-            //lcd_scroll_buffer_dirty = 0;
-            screen_refresh_status = SCREEN_REFRESH_INIT;
-          }
-        break;
-      }
-    }
-  }
+  display_paint(display_paint_budget_us);
+
+  #ifdef DEBUG_DISPLAY_TIMING
+    debug_display_timing_record(micros() - service_display_start);
+  #endif
 
 }
 #endif
 
 //-------------------------------------------------------------------------------------------------------
+
+#ifdef FEATURE_DISPLAY
+void lcd_set_cell_cursor(byte col, byte row) {
+  #ifndef FEATURE_OLED_SSD1306
+    lcd.setCursor(col,row);
+  #else
+    lcd.setCursor(col*11,row*2);
+  #endif
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+char display_desired_char(byte col, byte row) {
+
+  // what a display cell should show for the current lcd_status
+
+  char c = ' ';
+
+  switch (lcd_status) {
+    case LCD_TIMED_MESSAGE:
+      if (col < lcd_timed_buffer[row].length()) {c = lcd_timed_buffer[row].charAt(col);}
+      break;
+    case LCD_SCROLL_MSG:
+      if (col < lcd_scroll_buffer[row].length()) {c = lcd_scroll_buffer[row].charAt(col);}
+      break;
+  }
+
+  if (c <= 0) {c = ' ';}  // the old scroll redraw never printed these either
+  return c;
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void display_request_paint() {
+  lcd_paint_pending = 1;
+  lcd_paint_clean_cells = 0;   // re-check every cell, including ones the painter already passed
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void display_paint(unsigned long budget_us) {
+
+  // Draws only the cells that differ from what is already on the display, and stops once budget_us
+  // has been used (after drawing at least one cell) so a full redraw - scrolling, a timed message
+  // appearing or expiring - is spread over many loop() passes instead of stalling paddle handling.
+  // The display is never cleared with lcd.clear(), which on an SSD1306 blocks for ~30 mS.
+  // budget_us = 0 draws everything pending before returning.
+
+  static byte row = 0;
+  static byte col = 0;
+  unsigned long start_time = micros();
+  byte drew_a_cell = 0;
+
+  if (!lcd_paint_pending) {return;}
+
+  while (lcd_paint_clean_cells < (LCD_ROWS * LCD_COLUMNS)) {
+    char c = display_desired_char(col, row);
+    if (lcd_shown[row][col] != c) {
+      if (budget_us && drew_a_cell && ((micros() - start_time) >= budget_us)) {return;}  // out of time, continue on the next call
+      #ifdef FEATURE_LCD_BACKLIGHT_AUTO_DIM
+        if (!drew_a_cell) {lcd.backlight();}
+      #endif  // FEATURE_LCD_BACKLIGHT_AUTO_DIM
+      lcd_set_cell_cursor(col, row);
+      lcd.print(c);
+      lcd_shown[row][col] = c;
+      drew_a_cell = 1;
+      lcd_paint_clean_cells = 0;
+    }
+    lcd_paint_clean_cells++;
+    col++;
+    if (col >= LCD_COLUMNS) {
+      col = 0;
+      row++;
+      if (row >= LCD_ROWS) {row = 0;}
+    }
+  }
+
+  lcd_paint_pending = 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void display_paint_now_if_blocking() {
+
+  // Outside of normal keying (command mode, beacon, startup) the caller may block right after updating the
+  // display without calling service_display(), so draw everything immediately like the old code did.
+
+  if (keyer_machine_mode != KEYER_NORMAL) {
+    display_paint(0);
+  }
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+#ifdef DEBUG_DISPLAY_TIMING
+void debug_display_timing_record(unsigned long duration_us) {
+
+  // longest service_display() call, reported and reset every 10 seconds - this is time paddle handling has to wait
+
+  static unsigned long max_service_display_us = 0;
+  static unsigned long last_report_time = 0;
+
+  if (duration_us > max_service_display_us) {max_service_display_us = duration_us;}
+
+  if ((millis() - last_report_time) > 10000) {
+    debug_serial_port->print(F("display timing: max service_display uS: "));
+    debug_serial_port->println(max_service_display_us);
+    max_service_display_us = 0;
+    last_report_time = millis();
+  }
+
+}
+#endif //DEBUG_DISPLAY_TIMING
+#endif //FEATURE_DISPLAY
+
 
 #ifdef FEATURE_OLED_SSD1306
 void ssd1306_toggle_display() {
@@ -3995,7 +4050,7 @@ void display_scroll_reset() {
   for (byte x = 0; x < LCD_ROWS; x++) {
     lcd_scroll_buffer[x] = "";
   }
-  lcd_scroll_buffer_dirty = 0;
+  display_request_paint();
   display_scroll_column_pointer = 0;
   display_scroll_row_pointer = 0;
   display_scroll_holding_space = 0;
@@ -4026,7 +4081,7 @@ void display_scroll_print_char(char charin){
 
   if (lcd_status != LCD_SCROLL_MSG) {
     lcd_status = LCD_SCROLL_MSG;
-    lcd.clear();
+    display_request_paint();
   }
 
   if (charin == ' '){
@@ -4044,7 +4099,6 @@ void display_scroll_print_char(char charin){
         }
         lcd_scroll_buffer[x] = "";
         display_scroll_row_pointer--;
-        lcd_scroll_flag = 1;
       }
     }
     if (display_scroll_column_pointer > 0){ // don't put a space in the first column
@@ -4065,14 +4119,13 @@ void display_scroll_print_char(char charin){
       }
       lcd_scroll_buffer[x] = "";
       display_scroll_row_pointer--;
-      lcd_scroll_flag = 1;
     }
   }
   lcd_scroll_buffer[display_scroll_row_pointer].concat(charin);
   display_scroll_column_pointer++;
 
 
-  lcd_scroll_buffer_dirty = 1;
+  display_request_paint();
 }
 
 #endif //FEATURE_DISPLAY
@@ -4081,12 +4134,12 @@ void display_scroll_print_char(char charin){
 //-------------------------------------------------------------------------------------------------------
 #ifdef FEATURE_DISPLAY
 void lcd_clear() {
-  lcd.clear();
   #ifndef FEATURE_OLED_SSD1306
   lcd.noCursor();//sp5iou 20180328
   #endif
   lcd_status = LCD_CLEAR;
-
+  display_request_paint();
+  display_paint_now_if_blocking();
 }
 #endif
 //-------------------------------------------------------------------------------------------------------
@@ -4101,44 +4154,26 @@ void lcd_center_print_timed(String lcd_print_string, byte row_number, unsigned i
   #endif
 
   if (lcd_status != LCD_TIMED_MESSAGE) {
-    lcd_previous_status = lcd_status;
+    if (lcd_status != LCD_REVERT) {             // a revert still pending already holds the status to go back to
+      lcd_previous_status = lcd_status;
+    }
     lcd_status = LCD_TIMED_MESSAGE;
-    lcd.clear();
-  } else {
-    clear_display_row(row_number);
+    for (byte x = 0; x < LCD_ROWS; x++) {
+      lcd_timed_buffer[x] = "";
+    }
   }
-  #ifndef FEATURE_OLED_SSD1306
-    lcd.setCursor(((LCD_COLUMNS - lcd_print_string.length())/2),row_number);
-  #else
-    if (lcd_print_string.length() <= LCD_COLUMNS ) 
-        lcd.setCursor(((LCD_COLUMNS - lcd_print_string.length())/2)*11,2*row_number);
-    else
-         lcd.setCursor(0,2*row_number);
-  #endif
-  lcd.print(lcd_print_string);
+  if (row_number < LCD_ROWS) {
+    lcd_timed_buffer[row_number] = "";
+    if (lcd_print_string.length() < LCD_COLUMNS) {
+      for (byte x = 0; x < ((LCD_COLUMNS - lcd_print_string.length())/2); x++) {
+        lcd_timed_buffer[row_number].concat(' ');
+      }
+    }
+    lcd_timed_buffer[row_number].concat(lcd_print_string);  // anything past LCD_COLUMNS is not drawn
+  }
   lcd_timed_message_clear_time = millis() + duration;
-}
-#endif
-
-//-------------------------------------------------------------------------------------------------------
-
-#ifdef FEATURE_DISPLAY
-void clear_display_row(byte row_number)
-{
-  #ifdef FEATURE_LCD_BACKLIGHT_AUTO_DIM
-    lcd.backlight();
-  #endif  //FEATURE_LCD_BACKLIGHT_AUTO_DIM
-  #ifndef FEATURE_OLED_SSD1306
-  lcd.noCursor();//sp5iou 20180328
-  #endif
-  for (byte x = 0; x < LCD_COLUMNS; x++) {
-    #ifndef FEATURE_OLED_SSD1306
-    lcd.setCursor(x,row_number);
-    #else
-    lcd.setCursor(x*11,row_number*2);
-    #endif
-    lcd.print(" ");
-  }
+  display_request_paint();
+  display_paint_now_if_blocking();
 }
 #endif
 
@@ -8641,11 +8676,8 @@ void command_mode() {
   #endif //OPTION_WATCHDOG_TIMER
 	
   #ifdef FEATURE_DISPLAY
-    lcd.clear();
-    for (int x = 0; x < LCD_ROWS; x++) {        // as we exit, redraw the display that we had before we went into Command Mode
-      lcd.setCursor(0, x);
-      lcd.print(lcd_scroll_buffer[x]);
-    }
+    lcd_status = LCD_SCROLL_MSG;                // as we exit, redraw the display that we had before we went into Command Mode
+    display_request_paint();
   #endif                                        // FEATURE_DISPLAY
 
 }
@@ -19332,6 +19364,12 @@ void initialize_display(){
       lcd.clear(); // you have to ;o)
     #endif //OPTION_DISPLAY_NON_ENGLISH_EXTENSIONS
 
+    for (byte y = 0; y < LCD_ROWS; y++) {      // the display was cleared by begin() above
+      for (byte x = 0; x < LCD_COLUMNS; x++) {
+        lcd_shown[y][x] = ' ';
+      }
+    }
+
      if (LCD_COLUMNS < 9) {
       lcd_center_print_timed("K3NGKeyr", 0, 4000);
     } else {
@@ -19357,6 +19395,7 @@ void initialize_display(){
       #endif                                                        // OPTION_PERSONALIZED_STARTUP_SCREEN
       if (LCD_ROWS > 3) lcd_center_print_timed("V: " + String(CODE_VERSION), 3, 4000);      // display the code version on the fourth line of the display
     }
+    display_paint(0);                           // show the startup screen now; setup() goes on to block while sounding out HI
   #endif //FEATURE_DISPLAY
 
   if (keyer_machine_mode != BEACON) {
