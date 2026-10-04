@@ -331,4 +331,5 @@
   #define VBAND_LINK_RADIO_TX 1                        // tx line to go back to if VBAND_LINK_TX is still selected at boot
   #define VBAND_LINK_TIMEOUT_MS 6000                   // the adapter is gone after this long without a valid frame
   #define VBAND_LINK_HEARTBEAT_MS 2000
+  #define VBAND_LINK_MY_TAG "ME"                       // starts the display line for our own sending when VBand traffic is shown
 #endif //FEATURE_VBAND_LINK
