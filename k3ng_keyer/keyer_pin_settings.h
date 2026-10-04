@@ -11,7 +11,7 @@
 #define tx_key_line_5 0
 #define tx_key_line_6 0
 #define sidetone_line 52         // connect a speaker for sidetone
-#define potentiometer A0        // Speed potentiometer (0 to 5 V) Use pot from 1k to 10k
+#define potentiometer A2        // Speed potentiometer (0 to 5 V) Use pot from 1k to 10k
 #define ptt_tx_1 0              // PTT ("push to talk") lines
 #define ptt_tx_2 0              //   Can be used for keying fox transmitter, T/R switch, or keying slow boatanchors
 #define ptt_tx_3 0              //   These are optional - set to 0 if unused
@@ -24,7 +24,7 @@
 #define potentiometer_enable_pin 0  // if defined, the potentiometer will be enabled only when this pin is held low; set to 0 to ignore this pin
 
 #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
-  #define farnsworth_potentiometer A4  // Farnsworth character speed potentiometer (0 to 5 V) Use pot from 1k to 10k; must be an analog pin
+  #define farnsworth_potentiometer A0  // Farnsworth character speed potentiometer (0 to 5 V) Use pot from 1k to 10k; must be an analog pin
 #endif //FEATURE_FARNSWORTH_POTENTIOMETER
 
 #ifdef FEATURE_BUTTONS
@@ -104,7 +104,7 @@ FEATURE_SIDETONE_SWITCH
 // FEATURE_CW_DECODER & OPTION_CW_DECODER_GOERTZEL_AUDIO_DETECTOR
 // See https://github.com/k3ng/k3ng_cw_keyer/wiki/385-Feature:-CW-Decoder for details
 #define cw_decoder_pin 0             // This is for use with external decoding hardware
-#define cw_decoder_audio_input_pin A2 // This is for audio detection decoding using OPTION_CW_DECODER_GOERTZEL_AUDIO_DETECTOR; this must be an analog pin!
+#define cw_decoder_audio_input_pin A3 // This is for audio detection decoding using OPTION_CW_DECODER_GOERTZEL_AUDIO_DETECTOR; this must be an analog pin!
 #define cw_decoder_indicator 48       // Output - goes HIGH when cw tone is detected by OPTION_CW_DECODER_GOERTZEL_AUDIO_DETECTOR
 
 #if defined(FEATURE_COMPETITION_COMPRESSION_DETECTION)
