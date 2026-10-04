@@ -42,7 +42,7 @@
 #define winkey_xoff_threshold 20         // the number of chars in the buffer when we begin sending XOFFs
 #define winkey_xon_threshold 10          // the number of chars in the buffer below which we deactivate XOFF
 #define default_memory_repeat_time 3000  // time in milliseconds
-#define LCD_COLUMNS 11
+#define LCD_COLUMNS 18
 #define LCD_ROWS 4
 #define lcd_i2c_address_mathertel_PCF8574 0x27             // I2C address of display for FEATURE_LCD_MATHERTEL_PCF8574
 #define lcd_i2c_address_fdebrander_lcd 0x27                // I2C address of display for FEATURE_LCD_I2C_FDEBRABANDER
@@ -50,7 +50,7 @@
 //#define lcd_i2c_address_ydv1_lcd 0x38                    // I2C address of display for FEATURE_LCD_YDv1
 #define lcd_i2c_address_sainsmart_lcd 0x27                // I2C address of display for FEATURE_LCD_SAINSMART_I2C 
 #define oled_i2c_address_ssd1306 0x3C                     // I2C address of display for FEATURE_OLED_SSD1306
-#define oled_ssd1306_font fixed_bold10x15                // fixed-width SSD1306Ascii font for FEATURE_OLED_SSD1306; LCD_COLUMNS x LCD_ROWS must fit 128x64 pixels with it (e.g. X11fixed7x14B: 18 x 4, System5x7: 21 x 8)
+#define oled_ssd1306_font X11fixed7x14B                  // fixed-width SSD1306Ascii font for FEATURE_OLED_SSD1306; LCD_COLUMNS x LCD_ROWS must fit 128x64 pixels with it (e.g. X11fixed7x14B: 18 x 4, System5x7: 21 x 8)
 #define lcd_i2c_address_twiliquidcrystal_lcd 0x27                // I2C address of display for FEATURE_LCD_TWILIQUIDCRYSTAL 
 #define hell_pixel_microseconds 4025
 #define program_memory_limit_consec_spaces 1
