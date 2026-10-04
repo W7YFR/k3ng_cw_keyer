@@ -1963,6 +1963,18 @@ uint16_t memory_area_end = 0;
   byte display_scroll_holding_space = 0;
 #endif //FEATURE_DISPLAY
 
+#ifdef FEATURE_VBAND_LINK
+  #define VBAND_LINK_MAX_FRAME 64
+  byte vband_link_up = 0;
+  byte vband_link_tx_before = VBAND_LINK_RADIO_TX;  // tx line to return to when the adapter goes away
+  byte vband_link_tx_pending = 0;                   // tx line to switch to once the keyer is idle, 0 = none
+  unsigned long vband_link_last_frame_time = 0;
+  unsigned long vband_link_last_heartbeat_time = 0;
+  char vband_link_rx_frame[VBAND_LINK_MAX_FRAME + 1];
+  byte vband_link_rx_length = 0;
+  byte vband_link_in_frame = 0;
+#endif //FEATURE_VBAND_LINK
+
 #ifdef DEBUG_VARIABLE_DUMP
   long dit_start_time;
   long dit_end_time;
@@ -2523,6 +2535,7 @@ void setup()
   initialize_udp();
   initialize_web_server();
   initialize_display();
+  initialize_vband_link();
   initialize_sd_card();
   initialize_debug_startup();
 
@@ -2649,7 +2662,14 @@ void loop()
     #endif
 
     #ifdef FEATURE_CW_DECODER
+      #ifdef FEATURE_VBAND_LINK
+        if (!vband_link_up)            // VBand traffic is shown by the adapter, decoded from exact timings
+      #endif
       service_cw_decoder();
+    #endif
+
+    #ifdef FEATURE_VBAND_LINK
+      service_vband_link();
     #endif
 
     #ifdef FEATURE_LED_RING
@@ -4179,6 +4199,198 @@ void lcd_center_print_timed(String lcd_print_string, byte row_number, unsigned i
   display_paint_now_if_blocking();
 }
 #endif
+
+//-------------------------------------------------------------------------------------------------------
+
+#ifdef FEATURE_VBAND_LINK
+
+// Serial link to a VBand ESP32 adapter. The adapter keys VBand from VBAND_LINK_TX's key line and sends
+// status and received traffic for the display. Frames are "$TYPE,fields*XX\n" where XX is the XOR of the
+// bytes between $ and * in hex. Either side may be powered off at any time: the adapter always talks
+// first, our TX pin stays high-impedance until we hear it, and nothing here ever waits on the port.
+
+void vband_link_enable_tx(byte enable) {
+
+  #if defined(VBAND_LINK_UART_CONTROL_REGISTER) && defined(VBAND_LINK_UART_TX_ENABLE_BIT)
+    if (enable) {
+      VBAND_LINK_UART_CONTROL_REGISTER |= (1 << VBAND_LINK_UART_TX_ENABLE_BIT);
+    } else {
+      VBAND_LINK_UART_CONTROL_REGISTER &= ~(1 << VBAND_LINK_UART_TX_ENABLE_BIT);
+      pinMode(VBAND_LINK_TX_PIN, INPUT);       // no pull-up: the adapter's divider holds the line low
+    }
+  #endif
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte vband_link_checksum(const char *body, byte length) {
+
+  byte checksum = 0;
+  for (byte x = 0; x < length; x++) {checksum ^= (byte)body[x];}
+  return checksum;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_send(const char *body) {
+
+  // drops the frame rather than waiting if it doesn't fit in the TX buffer right now
+
+  char tail[5];
+  byte length = strlen(body);
+
+  if (!vband_link_up) {return;}
+  if (VBAND_LINK_SERIAL_PORT.availableForWrite() < (length + 5)) {return;}
+  sprintf(tail, "*%02X\n", vband_link_checksum(body, length));
+  VBAND_LINK_SERIAL_PORT.write('$');
+  VBAND_LINK_SERIAL_PORT.write(body);
+  VBAND_LINK_SERIAL_PORT.write(tail);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_send_heartbeat() {
+
+  vband_link_send("HI," CODE_VERSION);
+  vband_link_last_heartbeat_time = millis();
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_switch_tx_when_idle() {
+
+  // Switching key lines with the key down would leave the old line keyed, so wait until nothing is
+  // being sent. The switch is only for this session - VBAND_LINK_TX shouldn't become the saved tx line.
+
+  byte config_was_dirty;
+
+  if ((!vband_link_tx_pending) || key_state || ptt_line_activated || send_buffer_bytes) {return;}
+
+  config_was_dirty = config_dirty;
+  switch_to_tx_silent(vband_link_tx_pending);
+  config_dirty = config_was_dirty;
+  vband_link_tx_pending = 0;
+  #ifdef FEATURE_DISPLAY
+    lcd_center_print_timed("TX " + String(configuration.current_tx), 1, default_display_msg_delay);
+  #endif
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_set_up(byte up) {
+
+  if (up == vband_link_up) {return;}
+
+  if (up) {
+    vband_link_up = 1;
+    vband_link_enable_tx(1);
+    vband_link_send_heartbeat();                   // answer right away instead of waiting a heartbeat
+    vband_link_tx_before = configuration.current_tx;
+    if (configuration.current_tx != VBAND_LINK_TX) {vband_link_tx_pending = VBAND_LINK_TX;}
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed("VBand On", 0, default_display_msg_delay);
+    #endif
+  } else {
+    vband_link_up = 0;
+    vband_link_enable_tx(0);
+    vband_link_tx_pending = 0;
+    if (configuration.current_tx == VBAND_LINK_TX) {   // a tx picked by hand while connected is left alone
+      vband_link_tx_pending = (vband_link_tx_before == VBAND_LINK_TX) ? VBAND_LINK_RADIO_TX : vband_link_tx_before;
+    }
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed("VBand Off", 0, default_display_msg_delay);
+    #endif
+  }
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_handle_frame() {
+
+  // vband_link_rx_frame holds "TYPE[,fields]*XX" without the $
+
+  char *star = strrchr(vband_link_rx_frame, '*');
+  char *fields;
+
+  if ((star == NULL) || (star == vband_link_rx_frame) || (strlen(star) != 3)) {return;}
+  if ((!isxdigit(star[1])) || (!isxdigit(star[2]))) {return;}
+  if (strtol(star + 1, NULL, 16) != vband_link_checksum(vband_link_rx_frame, star - vband_link_rx_frame)) {return;}
+  *star = 0;
+
+  fields = strchr(vband_link_rx_frame, ',');
+  if (fields) {*fields++ = 0;} else {fields = star;}
+
+  if (strcmp(vband_link_rx_frame, "BYE") == 0) {   // planned power off or reboot
+    vband_link_set_up(0);
+    return;
+  }
+
+  vband_link_last_frame_time = millis();
+  vband_link_set_up(1);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void service_vband_link() {
+
+  #ifdef DEBUG_LOOP
+    debug_serial_port->println(F("loop: entering service_vband_link"));
+  #endif
+
+  char incoming_char;
+
+  for (byte x = 0; (x < 16) && VBAND_LINK_SERIAL_PORT.available(); x++) {   // a few bytes per pass keeps loop() quick
+    incoming_char = VBAND_LINK_SERIAL_PORT.read();
+    if (incoming_char == '$') {
+      vband_link_rx_length = 0;
+      vband_link_in_frame = 1;
+    } else if ((!vband_link_in_frame) || (incoming_char == '\r')) {
+      // noise between frames, e.g. the line floating while the adapter is off
+    } else if (incoming_char == '\n') {
+      vband_link_rx_frame[vband_link_rx_length] = 0;
+      vband_link_in_frame = 0;
+      vband_link_handle_frame();
+    } else if (vband_link_rx_length >= VBAND_LINK_MAX_FRAME) {
+      vband_link_in_frame = 0;                   // too long to be a frame, wait for the next $
+    } else {
+      vband_link_rx_frame[vband_link_rx_length++] = incoming_char;
+    }
+  }
+
+  vband_link_switch_tx_when_idle();
+
+  if (vband_link_up) {
+    if ((millis() - vband_link_last_frame_time) > VBAND_LINK_TIMEOUT_MS) {
+      vband_link_set_up(0);
+    } else if ((millis() - vband_link_last_heartbeat_time) >= VBAND_LINK_HEARTBEAT_MS) {
+      vband_link_send_heartbeat();
+    }
+  }
+
+}
+
+#endif //FEATURE_VBAND_LINK
+
+//-------------------------------------------------------------------------------------------------------
+
+void initialize_vband_link() {
+
+  #ifdef FEATURE_VBAND_LINK
+    VBAND_LINK_SERIAL_PORT.begin(VBAND_LINK_BAUD);
+    vband_link_enable_tx(0);                     // stay quiet until the adapter is heard from
+    if (configuration.current_tx == VBAND_LINK_TX) {
+      switch_to_tx_silent(VBAND_LINK_RADIO_TX);  // left over from a session with the adapter; it isn't connected yet
+    }
+  #endif //FEATURE_VBAND_LINK
+
+}
 
 //-------------------------------------------------------------------------------------------------------
 
