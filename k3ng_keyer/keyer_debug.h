@@ -29,6 +29,7 @@
 // #define DEBUG_USB_KEYBOARD
 // #define DEBUG_CAPACITIVE_PADDLE
 // #define DEBUG_DISPLAY_SCROLL_PRINT_CHAR
+// #define DEBUG_DISPLAY_TIMING            // reports the longest service_display() call every 10 seconds
 // #define DEBUG_WINKEY   // <- to use this you must have a multi-serial port Arduino and use FEATURE_COMMAND_LINE_INTERFACE_ON_SECONDARY_PORT
 // #define DEBUG_WINKEY_SEND_ERRANT_BYTE
 // #define DEBUG_WINKEY_PORT_WRITE
