@@ -1932,7 +1932,8 @@ uint16_t memory_area_end = 0;
 
 #ifdef FEATURE_VBAND_LINK
   #define VBAND_LINK_MAX_FRAME 64
-  byte vband_link_up = 0;
+  byte vband_link_up = 0;                           // the adapter is being heard from
+  byte vband_link_ready = 0;                        // and says VBand itself is usable ("VB,1")
   byte vband_link_tx_before = VBAND_LINK_RADIO_TX;  // tx line to return to when the adapter goes away
   byte vband_link_tx_pending = 0;                   // tx line to switch to once the keyer is idle, 0 = none
   unsigned long vband_link_last_frame_time = 0;
@@ -2613,7 +2614,7 @@ void loop()
 
     #ifdef FEATURE_CW_DECODER
       #ifdef FEATURE_VBAND_LINK
-        if (!vband_link_up)            // VBand traffic is shown by the adapter, decoded from exact timings
+        if (!vband_link_ready)         // VBand traffic is shown by the adapter, decoded from exact timings
       #endif
       service_cw_decoder();
     #endif
@@ -4197,6 +4198,36 @@ void vband_link_switch_tx_when_idle() {
 
 //-------------------------------------------------------------------------------------------------------
 
+void vband_link_set_ready(byte ready) {
+
+  // Keying only moves to VBAND_LINK_TX while the adapter says VBand is usable (joined a channel), not merely
+  // because the adapter is being heard from - it starts talking long before its WiFi is up.
+
+  if (ready == vband_link_ready) {return;}
+
+  if (ready) {
+    vband_link_ready = 1;
+    vband_link_tx_before = configuration.current_tx;
+    vband_link_tx_pending = 0;
+    if (configuration.current_tx != VBAND_LINK_TX) {vband_link_tx_pending = VBAND_LINK_TX;}
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed("VBand On", 0, default_display_msg_delay);
+    #endif
+  } else {
+    vband_link_ready = 0;
+    vband_link_tx_pending = 0;
+    if (configuration.current_tx == VBAND_LINK_TX) {   // a tx picked by hand while connected is left alone
+      vband_link_tx_pending = (vband_link_tx_before == VBAND_LINK_TX) ? VBAND_LINK_RADIO_TX : vband_link_tx_before;
+    }
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed("VBand Off", 0, default_display_msg_delay);
+    #endif
+  }
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 void vband_link_set_up(byte up) {
 
   if (up == vband_link_up) {return;}
@@ -4205,21 +4236,10 @@ void vband_link_set_up(byte up) {
     vband_link_up = 1;
     vband_link_enable_tx(1);
     vband_link_send_heartbeat();                   // answer right away instead of waiting a heartbeat
-    vband_link_tx_before = configuration.current_tx;
-    if (configuration.current_tx != VBAND_LINK_TX) {vband_link_tx_pending = VBAND_LINK_TX;}
-    #ifdef FEATURE_DISPLAY
-      lcd_center_print_timed("VBand On", 0, default_display_msg_delay);
-    #endif
   } else {
+    vband_link_set_ready(0);                       // an adapter we can't hear can't be keying VBand
     vband_link_up = 0;
     vband_link_enable_tx(0);
-    vband_link_tx_pending = 0;
-    if (configuration.current_tx == VBAND_LINK_TX) {   // a tx picked by hand while connected is left alone
-      vband_link_tx_pending = (vband_link_tx_before == VBAND_LINK_TX) ? VBAND_LINK_RADIO_TX : vband_link_tx_before;
-    }
-    #ifdef FEATURE_DISPLAY
-      lcd_center_print_timed("VBand Off", 0, default_display_msg_delay);
-    #endif
   }
 
 }
@@ -4248,6 +4268,10 @@ void vband_link_handle_frame() {
 
   vband_link_last_frame_time = millis();
   vband_link_set_up(1);
+
+  if (strcmp(vband_link_rx_frame, "VB") == 0) {    // "VB,1" VBand usable / "VB,0" not
+    vband_link_set_ready(fields[0] == '1');
+  }
 
   #ifdef FEATURE_DISPLAY
     if (strcmp(vband_link_rx_frame, "ST") == 0) {

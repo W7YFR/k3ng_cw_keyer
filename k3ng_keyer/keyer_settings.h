@@ -327,7 +327,7 @@
   #define VBAND_LINK_UART_CONTROL_REGISTER UCSR2B      // AVR only: register and bit that hand VBAND_LINK_TX_PIN to the UART (comment both out on other boards to leave TX always on)
   #define VBAND_LINK_UART_TX_ENABLE_BIT TXEN2
   #define VBAND_LINK_BAUD 38400
-  #define VBAND_LINK_TX 2                              // tx line keyed while the adapter is connected (wired to the adapter's key input)
+  #define VBAND_LINK_TX 2                              // tx line keyed while the adapter reports VBand is ready (wired to the adapter's key input)
   #define VBAND_LINK_RADIO_TX 1                        // tx line to go back to if VBAND_LINK_TX is still selected at boot
   #define VBAND_LINK_TIMEOUT_MS 6000                   // the adapter is gone after this long without a valid frame
   #define VBAND_LINK_HEARTBEAT_MS 2000

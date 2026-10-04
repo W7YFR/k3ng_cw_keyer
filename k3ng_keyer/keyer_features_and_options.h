@@ -60,7 +60,7 @@
 // #define FEATURE_SEQUENCER
 // #define FEATURE_WEB_SERVER      // Details: https://github.com/k3ng/k3ng_cw_keyer/wiki/390-Feature:-Ethernet,-Web-Server,-and-Internet-Linking
 // #define FEATURE_INTERNET_LINK   // Details: https://github.com/k3ng/k3ng_cw_keyer/wiki/390-Feature:-Ethernet,-Web-Server,-and-Internet-Linking
-// #define FEATURE_VBAND_LINK      // serial link to a VBand (hamradio.solutions/vband) ESP32 adapter; while it's connected, keying goes to VBAND_LINK_TX - settings in keyer_settings.h
+// #define FEATURE_VBAND_LINK      // serial link to a VBand (hamradio.solutions/vband) ESP32 adapter; while it reports VBand is ready, keying goes to VBAND_LINK_TX - settings in keyer_settings.h
 
 // #define FEATURE_COMMAND_LINE_INTERFACE_ON_SECONDARY_PORT     // Activate the Command Line interface on the secondary serial port
 // #define FEATURE_MIDI                     // sends MIDI notes on supported hardware (teensy 3.x). Can be used e.g. with quisk SDR software
