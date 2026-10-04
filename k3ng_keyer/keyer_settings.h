@@ -320,3 +320,15 @@
 #endif //FEATURE_COMMAND_MODE_ENHANCED_CMD_ACKNOWLEDGEMENT
 
 #define HI_TEXT "HI"  // Must be in UPPER case
+
+#ifdef FEATURE_VBAND_LINK
+  #define VBAND_LINK_SERIAL_PORT Serial2               // UART to the VBand ESP32 adapter (Mega: TX2 = D16, RX2 = D17)
+  #define VBAND_LINK_TX_PIN 16                         // that port's TX pin - left high-impedance whenever the adapter isn't heard from, so it isn't fed current while powered off
+  #define VBAND_LINK_UART_CONTROL_REGISTER UCSR2B      // AVR only: register and bit that hand VBAND_LINK_TX_PIN to the UART (comment both out on other boards to leave TX always on)
+  #define VBAND_LINK_UART_TX_ENABLE_BIT TXEN2
+  #define VBAND_LINK_BAUD 38400
+  #define VBAND_LINK_TX 2                              // tx line keyed while the adapter is connected (wired to the adapter's key input)
+  #define VBAND_LINK_RADIO_TX 1                        // tx line to go back to if VBAND_LINK_TX is still selected at boot
+  #define VBAND_LINK_TIMEOUT_MS 6000                   // the adapter is gone after this long without a valid frame
+  #define VBAND_LINK_HEARTBEAT_MS 2000
+#endif //FEATURE_VBAND_LINK
