@@ -3917,6 +3917,12 @@ void service_display() {
     unsigned long service_display_start = micros();
   #endif
 
+  #ifdef FEATURE_VBAND_LINK
+    if (keyer_machine_mode != KEYER_NORMAL) {   // command mode and other loops that don't return to loop() but do keep the display going
+      service_vband_link();
+    }
+  #endif
+
   if ((lcd_status == LCD_TIMED_MESSAGE) && (millis() > lcd_timed_message_clear_time)) {
     lcd_status = LCD_REVERT;
   }
@@ -4346,6 +4352,14 @@ void vband_link_handle_frame() {
   fields = strchr(vband_link_rx_frame, ',');
   if (fields) {*fields++ = 0;} else {fields = star;}
 
+  if (keyer_machine_mode != KEYER_NORMAL) {        // command mode etc.: just keep the link alive, see service_vband_link()
+    if (strcmp(vband_link_rx_frame, "BYE") != 0) {
+      vband_link_last_frame_time = millis();
+      vband_link_set_up(1);
+    }
+    return;
+  }
+
   if (strcmp(vband_link_rx_frame, "BYE") == 0) {   // planned power off or reboot
     vband_link_set_up(0);
     return;
@@ -4399,11 +4413,23 @@ void vband_link_show_status(char *fields) {
 
 void service_vband_link() {
 
+  // Called from loop(), and from service_display() while outside KEYER_NORMAL (command mode and the like),
+  // so the adapter keeps hearing our heartbeat there. Outside KEYER_NORMAL the link is only kept alive:
+  // status screens, VBand on/off, tx switching and the timeout all wait until we're back, since they'd
+  // draw over command mode's display or change tx lines under it. The adapter repeats "VB" with every
+  // heartbeat, so we catch up within one heartbeat of returning.
+
   #ifdef DEBUG_LOOP
     debug_serial_port->println(F("loop: entering service_vband_link"));
   #endif
 
+  static unsigned long last_service_time = 0;
   char incoming_char;
+
+  if ((millis() - last_service_time) > 1000) {
+    vband_link_last_frame_time = millis();       // we weren't listening (a blocking loop that doesn't service the link), so the silence isn't the adapter's
+  }
+  last_service_time = millis();
 
   for (byte x = 0; (x < 16) && VBAND_LINK_SERIAL_PORT.available(); x++) {   // a few bytes per pass keeps loop() quick
     incoming_char = VBAND_LINK_SERIAL_PORT.read();
@@ -4423,10 +4449,12 @@ void service_vband_link() {
     }
   }
 
-  vband_link_switch_tx_when_idle();
+  if (keyer_machine_mode == KEYER_NORMAL) {
+    vband_link_switch_tx_when_idle();
+  }
 
   if (vband_link_up) {
-    if ((millis() - vband_link_last_frame_time) > VBAND_LINK_TIMEOUT_MS) {
+    if ((keyer_machine_mode == KEYER_NORMAL) && ((millis() - vband_link_last_frame_time) > VBAND_LINK_TIMEOUT_MS)) {
       vband_link_set_up(0);
     } else if ((millis() - vband_link_last_heartbeat_time) >= VBAND_LINK_HEARTBEAT_MS) {
       vband_link_send_heartbeat();
