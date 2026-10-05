@@ -9360,10 +9360,18 @@ void check_buttons() {
   long button_depress_time;
   byte paddle_was_hit = 0;
   byte previous_sidetone_mode = 0;
+  byte memory_button;
 
   if (analogbuttontemp < 0 ) { // no button pressed.
     return;
   }
+
+  // number_of_memories can be more than there are memory buttons (12 with the CLI), so check the extra buttons
+  // too - otherwise an extra button also plays (or, held, switches to the transmitter of) a memory
+  memory_button = (analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1));
+  #ifdef EXTRA_BUTTONS
+    if (analogbuttontemp >= FIRST_EXTRA_BUTTON_INDEX) {memory_button = 0;}
+  #endif
 
   #ifdef FEATURE_MEMORIES
     repeat_memory = 255;
@@ -9393,7 +9401,7 @@ void check_buttons() {
       }
     #endif //FEATURE_COMMAND_MODE
     #ifdef FEATURE_MEMORIES
-      if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1)) && ((millis() - button_last_add_to_send_buffer_time) > 400)) {
+      if (memory_button && ((millis() - button_last_add_to_send_buffer_time) > 400)) {
 
         #ifdef FEATURE_WINKEY_EMULATION
           #ifndef OPTION_WINKEY_2_SUPPORT
@@ -9500,7 +9508,7 @@ void check_buttons() {
         }
         key_tx = 1;
       } // (analogbuttontemp == 0)
-      if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
+      if (memory_button) {
         while (button_array.Held(analogbuttontemp)) {
           if (((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) && (analogbuttontemp < (number_of_memories + 1))){
             #ifdef FEATURE_MEMORIES
@@ -9523,7 +9531,7 @@ void check_buttons() {
             key_tx = 1;
             configuration.sidetone_mode = previous_sidetone_mode;
         }
-      } //if ((analogbuttontemp > 0) && (analogbuttontemp < (number_of_memories + 1))) {
+      } //if (memory_button) {
       #ifdef EXTRA_BUTTONS
         if (analogbuttontemp >= FIRST_EXTRA_BUTTON_INDEX) {
           while (button_array.Held(analogbuttontemp)) {}
