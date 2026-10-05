@@ -1968,6 +1968,13 @@ uint16_t memory_area_end = 0;
 
 #ifdef FEATURE_VBAND_LINK
   #define VBAND_LINK_MAX_FRAME 64
+  // Version of the link's messages, sent in HI by both sides; each warns on the display when the other's
+  // differs, so flashing only one board after a breaking change says so. Bump it only for changes the other side
+  // can't cope with (a changed message format) - new message types don't need it, since both sides ignore types
+  // they don't know. Keep it in step with the adapter's MEGA_LINK_PROTOCOL_VERSION.
+  #define VBAND_LINK_PROTOCOL_VERSION 1
+  #define VBAND_LINK_STRINGIFY(x) #x
+  #define VBAND_LINK_STRING(x) VBAND_LINK_STRINGIFY(x)
   byte vband_link_up = 0;                           // the adapter is being heard from
   byte vband_link_ready = 0;                        // and says VBand itself is usable ("VB,1")
   byte vband_link_tx_before = VBAND_LINK_RADIO_TX;  // tx line to return to when the adapter goes away
@@ -1981,6 +1988,7 @@ uint16_t memory_area_end = 0;
   byte vband_link_text_behind_screen = 0;           // received text goes into the scroll buffer without replacing a status screen
   #define VBAND_LINK_COMMAND_MAX 8
   char vband_link_pending_command[VBAND_LINK_COMMAND_MAX + 1] = "";  // keyed after "/" in command mode, sent on leaving it
+  byte vband_link_version_checked = 0;              // since the link last came up
   char vband_link_command_reply = 0;                // the adapter's "CR" answer to "CK": '1' known command, '0' not
 #endif //FEATURE_VBAND_LINK
 
@@ -4309,7 +4317,7 @@ void vband_link_send(const char *body) {
 
 void vband_link_send_heartbeat() {
 
-  vband_link_send("HI," CODE_VERSION);
+  vband_link_send("HI," VBAND_LINK_STRING(VBAND_LINK_PROTOCOL_VERSION));
   vband_link_last_heartbeat_time = millis();
 
 }
@@ -4383,6 +4391,7 @@ void vband_link_set_up(byte up) {
     #endif
     vband_link_set_ready(0);                       // an adapter we can't hear can't be keying VBand
     vband_link_up = 0;
+    vband_link_version_checked = 0;                // whatever comes back may have been reflashed
     vband_link_enable_tx(0);
   }
 
@@ -4428,6 +4437,11 @@ void vband_link_handle_frame() {
     vband_link_set_ready(fields[0] == '1');
   }
 
+  if ((strcmp(vband_link_rx_frame, "HI") == 0) && (!vband_link_version_checked)) {   // "HI,<protocol>"
+    vband_link_version_checked = 1;
+    vband_link_check_version(atoi(fields));
+  }
+
   #ifdef FEATURE_DISPLAY
     if (strcmp(vband_link_rx_frame, "ST") == 0) {
       vband_link_show_status(fields);
@@ -4437,6 +4451,25 @@ void vband_link_handle_frame() {
       vband_link_show_system(fields);
     }
   #endif //FEATURE_DISPLAY
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_check_version(int adapter_protocol) {
+
+  // once per link-up: an adapter on a different link protocol version gets a warning saying which side to update
+
+  if (adapter_protocol == VBAND_LINK_PROTOCOL_VERSION) {return;}
+
+  #ifdef FEATURE_DISPLAY
+    if (lcd_status == LCD_TIMED_MESSAGE) {
+      lcd_status = lcd_previous_status;            // a fresh screen
+    }
+    lcd_center_print_timed("Link Mismatch", 0, 8000);
+    lcd_center_print_timed((adapter_protocol < VBAND_LINK_PROTOCOL_VERSION) ? "Update adapter" : "Update keyer", 1, 8000);
+    lcd_center_print_timed(String("Keyer v") + VBAND_LINK_PROTOCOL_VERSION + " Adptr v" + adapter_protocol, 2, 8000);
+  #endif
 
 }
 
