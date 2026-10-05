@@ -1978,6 +1978,10 @@ uint16_t memory_area_end = 0;
   byte vband_link_rx_length = 0;
   byte vband_link_in_frame = 0;
   char vband_link_speaker[9] = "";                  // tag of whoever the display's current line belongs to
+  byte vband_link_text_behind_screen = 0;           // received text goes into the scroll buffer without replacing a status screen
+  #define VBAND_LINK_COMMAND_MAX 8
+  char vband_link_pending_command[VBAND_LINK_COMMAND_MAX + 1] = "";  // keyed after "/" in command mode, sent on leaving it
+  char vband_link_command_reply = 0;                // the adapter's "CR" answer to "CK": '1' known command, '0' not
 #endif //FEATURE_VBAND_LINK
 
 #if defined(FEATURE_VBAND_LINK) && defined(FEATURE_DISPLAY)
@@ -4136,8 +4140,15 @@ void display_scroll_print_char(char charin){
   #endif //OPTION_DISPLAY_NON_ENGLISH_EXTENSIONS
 
   if (lcd_status != LCD_SCROLL_MSG) {
-    lcd_status = LCD_SCROLL_MSG;
-    display_request_paint();
+    #ifdef FEATURE_VBAND_LINK
+      if (vband_link_text_behind_screen && ((lcd_status == LCD_TIMED_MESSAGE) || (lcd_status == LCD_REVERT))) {
+        lcd_previous_status = LCD_SCROLL_MSG;    // the conversation shows once the status screen times out
+      } else
+    #endif
+    {
+      lcd_status = LCD_SCROLL_MSG;
+      display_request_paint();
+    }
   }
 
   if (charin == '\n'){                // start a new line (nothing to do if the current one is empty)
@@ -4396,6 +4407,9 @@ void vband_link_handle_frame() {
       vband_link_last_frame_time = millis();
       vband_link_set_up(1);
     }
+    if (strcmp(vband_link_rx_frame, "CR") == 0) {  // "CR,1" / "CR,0": the command we asked about is known or not
+      vband_link_command_reply = fields[0];
+    }
     return;
   }
 
@@ -4453,10 +4467,12 @@ void vband_link_show_received(char *fields) {
   char *text = strchr(fields, ',');
 
   if (text) {*text++ = 0;} else {text = fields + strlen(fields);}
+  vband_link_text_behind_screen = 1;               // someone else's sending mustn't wipe a screen you asked for, like /WHO
   vband_link_set_speaker(fields);
   while (*text) {
     display_scroll_print_char(*text++);
   }
+  vband_link_text_behind_screen = 0;
 
 }
 
@@ -4466,10 +4482,12 @@ void vband_link_show_system(char *text) {
 
   // "SYS,<text>" - a line of its own in the scrolling conversation, e.g. someone joining or leaving
 
+  vband_link_text_behind_screen = 1;
   display_scroll_print_char('\n');
   while (*text) {
     display_scroll_print_char(*text++);
   }
+  vband_link_text_behind_screen = 0;
   vband_link_speaker[0] = 0;                       // whoever sends next starts a new tagged line
 
 }
@@ -4501,6 +4519,101 @@ void vband_link_show_status(char *fields) {
 
 }
 #endif //FEATURE_DISPLAY
+
+//-------------------------------------------------------------------------------------------------------
+
+#ifdef FEATURE_COMMAND_MODE
+byte command_vband_link() {
+
+  // Command mode "/" followed by a word, e.g. "/OTA" or "/WHO": a command for the adapter. The word ends at a
+  // word space; a button press or keying nothing cancels. The adapter is asked whether it knows the word
+  // ("CK,<word>", answered "CR,1" or "CR,0") so a typo can be tried again without leaving command mode.
+  // Returns 1 if it does: command mode then exits and sends it ("CMD,<word>"), since the adapter answers
+  // with a status screen, which command mode wouldn't show.
+
+  char word[VBAND_LINK_COMMAND_MAX + 1];
+  char frame[4 + VBAND_LINK_COMMAND_MAX];
+  unsigned long asked_time;
+  byte length = 0;
+  long cw_char;
+  char character;
+
+  if (!vband_link_up) {
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed("No VBand", 0, default_display_msg_delay);
+    #endif
+    send_char('?',KEYER_NORMAL);
+    return 0;
+  }
+
+  #ifdef FEATURE_DISPLAY
+    lcd_center_print_timed("VBand cmd: /", 0, 10000);
+  #endif
+  while (length < VBAND_LINK_COMMAND_MAX) {
+    cw_char = get_cw_input_from_user(length ? ((1200 / configuration.wpm) * 7) : 10000);
+    if ((cw_char == 0) || (cw_char == 9)) {      // word space (or nothing keyed), or a button
+      if (cw_char == 9) {length = 0;}
+      break;
+    }
+    character = convert_cw_number_to_ascii(cw_char);
+    if (!(((character >= 'A') && (character <= 'Z')) || ((character >= '0') && (character <= '9')))) {
+      length = 0;                                  // not a letter or number; start again with "/"
+      send_char('?',KEYER_NORMAL);
+      break;
+    }
+    word[length++] = character;
+    word[length] = 0;
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed(String("VBand cmd: /") + word, 0, 10000);
+    #endif
+  }
+
+  if (length == 0) {
+    #ifdef FEATURE_DISPLAY
+      lcd_center_print_timed("Command Mode", 0, default_display_msg_delay);
+    #endif
+    return 0;
+  }
+  word[length] = 0;
+
+  strcpy(frame, "CK,");
+  strcat(frame, word);
+  vband_link_command_reply = 0;
+  vband_link_send(frame);
+  asked_time = millis();
+  while ((!vband_link_command_reply) && ((millis() - asked_time) < 1000)) {
+    service_vband_link();
+  }
+
+  if (vband_link_command_reply == '1') {
+    strcpy(vband_link_pending_command, word);
+    return 1;
+  }
+  #ifdef FEATURE_DISPLAY
+    lcd_center_print_timed(vband_link_command_reply ? (String("Unknown /") + word) : String("VBand no answer"), 0, default_display_msg_delay);
+    lcd_center_print_timed(vband_link_command_reply ? "/H for list" : "Try again", 1, default_display_msg_delay);
+  #endif
+  send_char('?',KEYER_NORMAL);
+  return 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_send_pending_command() {
+
+  // called as command mode exits, once status screens show again
+
+  char frame[5 + VBAND_LINK_COMMAND_MAX];
+
+  if (!vband_link_pending_command[0]) {return;}
+  strcpy(frame, "CMD,");
+  strcat(frame, vband_link_pending_command);
+  vband_link_pending_command[0] = 0;
+  vband_link_send(frame);
+
+}
+#endif //FEATURE_COMMAND_MODE
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -8196,6 +8309,10 @@ long get_cw_input_from_user(unsigned int exit_time_milliseconds) {
 
     check_paddles();
 
+    #ifdef FEATURE_VBAND_LINK
+      service_vband_link();                      // command mode can sit here a while; keep the adapter hearing us
+    #endif
+
     if (dit_buffer) {
       sending_mode = MANUAL_SENDING;
       send_dit();
@@ -8745,6 +8862,9 @@ void command_mode() {
     #endif
 
 	  case 2112: stay_in_command_mode = 0; break;     // X - exit command mode
+    #ifdef FEATURE_VBAND_LINK
+      case 21121: if (command_vband_link()) {stay_in_command_mode = 0;} break;  // / - command for the VBand adapter
+    #endif
         #ifdef FEATURE_AUTOSPACE
           case 2211: // Z - Autospace
             if (configuration.autospace_active) {
@@ -9052,6 +9172,9 @@ void command_mode() {
   #endif //command_mode_active_led
 
   keyer_machine_mode = KEYER_NORMAL;
+  #ifdef FEATURE_VBAND_LINK
+    vband_link_send_pending_command();
+  #endif
   //configuration.wpm = speed_wpm_before;
   speed_mode = speed_mode_before;   // go back to whatever speed mode we were in before
   configuration.keyer_mode = keyer_mode_before;
