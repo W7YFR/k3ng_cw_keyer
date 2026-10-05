@@ -17468,6 +17468,12 @@ int convert_cw_number_to_ascii (long number_in) {
     #ifndef OPTION_PS2_NON_ENGLISH_CHAR_LCD_DISPLAY_SUPPORT
       case 12121: return '+'; break;
       case 212122: return '!'; break;
+      case 212121: return ';'; break;
+      case 1112112: return '$'; break;
+      case 122221: return '\''; break;
+      case 121121: return '"'; break;
+      case 112212: return '_'; break;
+      case 212212: return ')'; break;
     #else
 
       case 212122: return 33; break; // ! //sp5iou
