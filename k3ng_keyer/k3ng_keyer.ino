@@ -9865,8 +9865,7 @@ void send_char(byte cw_char, byte omit_letterspace)
       case '*': send_the_dits_and_dahs("-...-.-"); break;
       case '.': send_the_dits_and_dahs(".-.-.-");  break;
       case ',': send_the_dits_and_dahs("--..--");  break;
-      case '!': send_the_dits_and_dahs("--..--");  break;  //sp5iou 20180328
-      //case '!': send_the_dits_and_dahs("-.-.--");break;//sp5iou 20180328
+      case '!': send_the_dits_and_dahs("-.-.--");  break;  // was "--..--" (sp5iou 20180328), which is a comma
       case '\'': send_the_dits_and_dahs(".----."); break; // apostrophe
       case '(': send_the_dits_and_dahs("-.--.");   break;
       case ')': send_the_dits_and_dahs("-.--.-");  break;
@@ -16574,6 +16573,7 @@ int convert_cw_number_to_ascii (long number_in) {
 
     #ifndef OPTION_PS2_NON_ENGLISH_CHAR_LCD_DISPLAY_SUPPORT
       case 12121: return '+'; break;
+      case 212122: return '!'; break;
     #else
 
       case 212122: return 33; break; // ! //sp5iou
