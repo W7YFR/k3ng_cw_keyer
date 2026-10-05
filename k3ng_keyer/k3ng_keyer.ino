@@ -4114,6 +4114,9 @@ void display_scroll_reset() {
   display_scroll_column_pointer = 0;
   display_scroll_row_pointer = 0;
   display_scroll_holding_space = 0;
+  #ifdef FEATURE_VBAND_LINK
+    vband_link_speaker[0] = 0;                     // whoever sends next starts the cleared screen with their tag
+  #endif
 }
 
 void display_scroll_print_char(char charin){
