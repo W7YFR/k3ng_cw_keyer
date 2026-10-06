@@ -66,6 +66,10 @@
   #error "FEATURE_BEACON_SETTING requires FEATURE_MEMORIES and you may also want FEATURE_MEMORY_MACROS"
 #endif
 
+#if defined(FEATURE_SETTINGS_MENU) && !defined(FEATURE_COMMAND_MODE)
+  #error "FEATURE_SETTINGS_MENU requires FEATURE_COMMAND_MODE"
+#endif
+
 #if defined(FEATURE_COMMAND_MODE) && !defined(FEATURE_BUTTONS)
   #error "FEATURE_COMMAND_MODE requires FEATURE_BUTTONS"
 #endif
