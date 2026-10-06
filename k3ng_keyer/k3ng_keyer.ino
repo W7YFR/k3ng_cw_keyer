@@ -1986,6 +1986,7 @@ uint16_t memory_area_end = 0;
   byte vband_link_in_frame = 0;
   char vband_link_speaker[9] = "";                  // tag of whoever the display's current line belongs to
   byte vband_link_text_behind_screen = 0;           // received text goes into the scroll buffer without replacing a status screen
+  char vband_link_my_tag[9] = VBAND_LINK_MY_TAG;    // our own sending's tag: the adapter's from our VBand name ("MY"), else this
   #define VBAND_LINK_COMMAND_MAX 8
   unsigned long vband_link_answer_until = 0;        // command mode shows the adapter's status screens until then: its answer to a command
   byte vband_link_version_checked = 0;              // since the link last came up
@@ -2018,8 +2019,8 @@ struct settings_menu_row {                          // one row of the menu: a gr
 struct settings_adapter_item {                      // one of the VBand adapter's settings or commands, as it listed them
   char key[7];
   char label[13];
-  char type;                                        // 'b' on/off, 'n' number, 's' text, 'a' a command (key is the word)
-  int value;                                        // for 's', its slot in settings_adapter_texts
+  char type;                                        // 'b' on/off, 'n' number, 'e' an option, 's' text, 'a' a command (key is the word)
+  int value;                                        // for 's', its slot in settings_adapter_texts; for 'e', the option's index
   int min;
   int max;
   int step;
@@ -2036,6 +2037,11 @@ struct settings_adapter_item {                      // one of the VBand adapter'
     settings_adapter_item settings_adapter_items[SETTINGS_ADAPTER_MAX];
     char settings_adapter_texts[SETTINGS_ADAPTER_TEXTS][SETTINGS_TEXT_MAX + 1];
     byte settings_adapter_text_count = 0;
+    #define SETTINGS_ADAPTER_OPTION_LISTS 4         // settings with a list of options; an item's step is its slot here
+    #define SETTINGS_OPTIONS_MAX 27
+    char settings_adapter_options[SETTINGS_ADAPTER_OPTION_LISTS][SETTINGS_OPTIONS_MAX + 1];   // names, |-separated
+    byte settings_adapter_option_count = 0;
+    char settings_adapter_kind = 0;                 // which half of the adapter's list is held: 's' settings, 'a' commands
     byte settings_adapter_count = 0;
     byte settings_adapter_listed = 0;               // the whole list ("SE") has come
     byte settings_adapter_reply = 0;                // answer to a read or set: 0 none yet, 1 value, 2 no such setting
@@ -2044,7 +2050,7 @@ struct settings_adapter_item {                      // one of the VBand adapter'
 #endif //FEATURE_SETTINGS_MENU
 
 #if defined(FEATURE_VBAND_LINK) && defined(FEATURE_DISPLAY)
-  #define VBAND_LINK_MY_SENDING() vband_link_set_speaker(VBAND_LINK_MY_TAG)   // our own sending is about to be echoed on the display
+  #define VBAND_LINK_MY_SENDING() vband_link_set_speaker(vband_link_my_tag)   // our own sending is about to be echoed on the display
 #else
   #define VBAND_LINK_MY_SENDING()
 #endif
@@ -2610,6 +2616,7 @@ void setup()
   initialize_web_server();
   initialize_display();
   initialize_vband_link();
+  initialize_settings_menu();
   initialize_sd_card();
   initialize_debug_startup();
 
@@ -4483,6 +4490,11 @@ void vband_link_handle_frame() {
     settings_adapter_frame(vband_link_rx_frame, fields);   // settings answers, in any mode (the menu runs in command mode)
   #endif
 
+  if ((strcmp(vband_link_rx_frame, "MY") == 0) && fields[0]) {   // "MY,<tag>": our own tag, from our VBand name
+    strncpy(vband_link_my_tag, fields, sizeof(vband_link_my_tag) - 1);
+    vband_link_my_tag[sizeof(vband_link_my_tag) - 1] = 0;
+  }
+
   if (keyer_machine_mode != KEYER_NORMAL) {        // command mode etc.: just keep the link alive, see service_vband_link()
     if (strcmp(vband_link_rx_frame, "BYE") != 0) {
       vband_link_last_frame_time = millis();
@@ -4831,6 +4843,10 @@ const settings_keyer_item settings_keyer_items[] = {
   {'K', "WT",    "Weight",      'n', 10, 90, 1, ""},
   {'K', "RATIO", "Dah ratio",   'r', 160, 800, 10, ""},
   {'K', "REV",   "Paddle rev",  'b', 0, 1, 1, ""},
+  {'K', "MEM",   "Dit/dah mem", 'b', 0, 1, 1, ""},
+  #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+    {'K', "ECHO",  "Paddle echo", 'b', 0, 1, 1, ""},
+  #endif
   #ifdef FEATURE_AUTOSPACE
     {'K', "ASPC",  "Autospace",   'b', 0, 1, 1, ""},
   #endif
@@ -5002,6 +5018,10 @@ int settings_keyer_get(byte item) {
   if (!strcmp(s.key, "WT")) {return configuration.weighting;}
   if (!strcmp(s.key, "RATIO")) {return configuration.dah_to_dit_ratio;}
   if (!strcmp(s.key, "REV")) {return (configuration.paddle_mode == PADDLE_REVERSE);}
+  if (!strcmp(s.key, "MEM")) {return !configuration.dit_buffer_off;}
+  #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+    if (!strcmp(s.key, "ECHO")) {return lcd_paddle_echo;}
+  #endif
   if (!strcmp(s.key, "ASPC")) {return configuration.autospace_active;}
   if (!strcmp(s.key, "RPT")) {return configuration.memory_repeat_time;}
   if (!strcmp(s.key, "LEAD")) {return configuration.ptt_lead_time[configuration.current_tx - 1];}
@@ -5048,6 +5068,17 @@ void settings_keyer_set(byte item, int value) {
   if (!strcmp(s.key, "WT")) {configuration.weighting = value;}
   if (!strcmp(s.key, "RATIO")) {configuration.dah_to_dit_ratio = value;}
   if (!strcmp(s.key, "REV")) {configuration.paddle_mode = value ? PADDLE_REVERSE : PADDLE_NORMAL;}
+  if (!strcmp(s.key, "MEM")) {                     // iambic memory: an opposite paddle touched mid-element is sent next
+    configuration.dit_buffer_off = !value;
+    configuration.dah_buffer_off = !value;
+  }
+  #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+    if (!strcmp(s.key, "ECHO")) {
+      lcd_paddle_echo = value;
+      settings_save_extras();
+      return;                                      // not part of K3NG's configuration
+    }
+  #endif
   if (!strcmp(s.key, "ASPC")) {configuration.autospace_active = value;}
   if (!strcmp(s.key, "RPT")) {configuration.memory_repeat_time = value;}
   if (!strcmp(s.key, "LEAD")) {configuration.ptt_lead_time[configuration.current_tx - 1] = value;}
@@ -5067,7 +5098,9 @@ String settings_value_text(char type, int value, const char *unit, int keyer_ite
 
   switch (type) {
     case 'b': return value ? "On" : "Off";
-    case 'e': return settings_enum_text(keyer_item, value, 0);
+    case 'e':
+      if (keyer_item >= 0) {return settings_enum_text(keyer_item, value, 0);}
+      return settings_option_name(unit, value);    // an adapter setting: unit holds its options
     case 'z': if (value == 0) {return "Off";} break;
     case 'r':
       snprintf(hundredths, sizeof(hundredths), "%d.%02d", value / 100, value % 100);
@@ -5085,11 +5118,35 @@ String settings_value_text(char type, int value, const char *unit, int keyer_ite
 
 //-------------------------------------------------------------------------------------------------------
 
-byte settings_parse_value(char type, const char *token, int keyer_item, int *value) {
+String settings_option_name(const char *options, int option) {
+
+  // option number "option" of "Off|Lobby|Last|Custom"
+
+  const char *start = options;
+
+  while (option-- > 0) {
+    start = strchr(start, '|');
+    if (!start) {return "?";}
+    start++;
+  }
+  const char *end = strchr(start, '|');
+  return end ? String(start).substring(0, end - start) : String(start);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_parse_value(char type, const char *token, int keyer_item, const char *options, int *value) {
 
   // a value as keyed or typed: a number (hundredths as "3.00" or 300), ON / OFF, or an option's word (A, B,
   // ULT...); returns 0 if it isn't one
 
+  if ((type == 'e') && (keyer_item < 0)) {      // an adapter setting's options, by name
+    for (int x = 0; settings_option_name(options, x) != "?"; x++) {
+      if (!strcasecmp(token, settings_option_name(options, x).c_str())) {*value = x; return 1;}
+    }
+    return 0;
+  }
   if (type == 'e') {
     for (byte x = 0; x < settings_enum_count(keyer_item); x++) {
       if (!strcasecmp(token, settings_enum_text(keyer_item, x, 1).c_str())) {*value = x; return 1;}
@@ -5183,6 +5240,15 @@ void settings_adapter_frame(const char *type, char *fields) {
       strncpy(item.unit, field[8], sizeof(item.unit) - 1);
       item.unit[sizeof(item.unit) - 1] = 0;
     }
+    if ((item.type == 'e') && (count > 8)) {       // the options' names go in a slot of their own (after step is read: it holds the slot)
+      item.step = -1;
+      if (settings_adapter_option_count < SETTINGS_ADAPTER_OPTION_LISTS) {
+        item.step = settings_adapter_option_count++;
+        strncpy(settings_adapter_options[item.step], field[8], SETTINGS_OPTIONS_MAX);
+        settings_adapter_options[item.step][SETTINGS_OPTIONS_MAX] = 0;
+      }
+      item.unit[0] = 0;
+    }
     if (index >= settings_adapter_count) {settings_adapter_count = index + 1;}
   }
 
@@ -5190,21 +5256,38 @@ void settings_adapter_frame(const char *type, char *fields) {
 
 //-------------------------------------------------------------------------------------------------------
 
-byte settings_adapter_fetch() {
+byte settings_adapter_fetch(char kind) {
 
-  // asks the adapter for its settings and commands; 1 if the whole list came
+  // asks the adapter for its settings (kind 's') or its commands ('a') - one half at a time, to save memory; 1 if
+  // the whole half came
 
   unsigned long asked_time = millis();
 
+  settings_adapter_kind = 0;
   if (!vband_link_up) {return 0;}
   settings_adapter_count = 0;
   settings_adapter_text_count = 0;
+  settings_adapter_option_count = 0;
   settings_adapter_listed = 0;
-  vband_link_send("SL");
+  vband_link_send((kind == 'a') ? "SL,a" : "SL,s");
   while ((!settings_adapter_listed) && ((millis() - asked_time) < 2000)) {
     service_vband_link();
   }
+  if (settings_adapter_listed) {settings_adapter_kind = kind;}
   return settings_adapter_listed;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+const char *settings_adapter_unit(int item) {
+
+  // an adapter setting's unit, or for one with options, their names
+
+  settings_adapter_item &s = settings_adapter_items[item];
+
+  if ((s.type == 'e') && (s.step >= 0) && (s.step < SETTINGS_ADAPTER_OPTION_LISTS)) {return settings_adapter_options[s.step];}
+  return s.unit;
 
 }
 
@@ -5261,7 +5344,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
 
   #ifdef FEATURE_VBAND_LINK
     if (group == 'V') {
-      if ((settings_adapter_count == 0) && (!settings_adapter_fetch())) {
+      if ((settings_adapter_kind != 's') && (!settings_adapter_fetch('s'))) {
         text = "VBand no answer";
         return 0;
       }
@@ -5277,7 +5360,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
           return 0;
         }
       } else if (value_token) {
-        if (!settings_parse_value(s.type, value_token, -1, &value)) {
+        if (!settings_parse_value(s.type, value_token, -1, settings_adapter_unit(item), &value)) {
           text = String("Bad value ") + value_token;
           return 0;
         }
@@ -5286,7 +5369,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
           return 0;
         }
       }
-      text = String(s.label) + " " + settings_value_text(s.type, s.value, s.unit, -1);
+      text = String(s.label) + " " + settings_value_text(s.type, s.value, settings_adapter_unit(item), -1);
       return 1;
     }
   #endif //FEATURE_VBAND_LINK
@@ -5298,7 +5381,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
   }
   const settings_keyer_item &s = settings_keyer_items[item];
   if (value_token) {
-    if (!settings_parse_value(s.type, value_token, item, &value)) {
+    if (!settings_parse_value(s.type, value_token, item, "", &value)) {
       text = String("Bad value ") + value_token;
       return 0;
     }
@@ -5328,7 +5411,7 @@ byte settings_menu_count(char group) {
     return count + 2;
   }
   #ifdef FEATURE_VBAND_LINK
-    if (group == 'V') {return 3;}                  // "< Back", Settings, Commands
+    if (group == 'V') {return 3;}                  // Commands, Settings, "< Back"
     if ((group == 'v') || (group == 'c')) {
       for (byte x = 0; x < settings_adapter_count; x++) {
         if ((settings_adapter_items[x].type == 'a') == (group == 'c')) {count++;}
@@ -5372,17 +5455,16 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
     return;
   }
 
-  if (row == 0) {
+  if (row == settings_menu_count(group) - 1) {    // "< Back" last, so a list opens on its first item
     out.label = "< Back";
     return;
   }
-  row--;
 
   #ifdef FEATURE_VBAND_LINK
     if (group == 'V') {                            // the adapter's settings and its commands, chosen first
       out.type = 'g';
-      out.target = row ? 'c' : 'v';
-      out.label = row ? "Commands" : "Settings";
+      out.target = row ? 'v' : 'c';                // Commands first
+      out.label = row ? "Settings" : "Commands";
       return;
     }
     if ((group == 'v') || (group == 'c')) {
@@ -5396,8 +5478,8 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
         out.value = s.value;
         out.min = s.min;
         out.max = s.max;
-        out.step = s.step;
-        out.unit = s.unit;
+        out.step = (s.type == 'e') ? 1 : s.step;
+        out.unit = settings_adapter_unit(x);
         return;
       }
       return;
@@ -5444,7 +5526,8 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
       settings_menu_get_row(group, top + x, row);
       line = ((top + x) == cursor) ? (editing ? "*" : ">") : " ";
       line.concat(row.label);
-      value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit, row.item);
+      value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit,
+                                  ((group == 'v') || (group == 'c')) ? -1 : row.item);
       if ((row.type == 'g') || (row.type == 'k')) {value = "";}
       if ((line.length() + 1 + value.length()) > LCD_COLUMNS) {        // a long name: as much as fits
         value = value.substring(0, (LCD_COLUMNS > (line.length() + 1)) ? (LCD_COLUMNS - line.length() - 1) : 0);
@@ -5469,6 +5552,41 @@ void settings_menu_close() {
   }
 
 }
+
+//-------------------------------------------------------------------------------------------------------
+
+#ifdef FEATURE_VBAND_LINK
+byte settings_menu_show_answer() {
+
+  // While the adapter's answer to a command shows, until it times out (or nothing comes within 5 s); a paddle
+  // touch cuts it short and isn't taken as a menu move. Returns 1 if the command button was pressed, to leave
+  // command mode.
+
+  unsigned long asked_time = millis();
+  byte answered = 0;
+
+  while (1) {
+    service_display();                             // outside KEYER_NORMAL this services the link too
+    if (lcd_status == LCD_TIMED_MESSAGE) {
+      answered = 1;
+    } else if (answered || ((millis() - asked_time) > 5000)) {
+      return 0;
+    }
+    if (analogbuttonread(0)) {
+      while (analogbuttonread(0)) {}
+      return 1;
+    }
+    if ((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) {
+      while ((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) {}
+      dit_buffer = 0;
+      dah_buffer = 0;
+      settings_menu_close();
+      return 0;
+    }
+  }
+
+}
+#endif //FEATURE_VBAND_LINK
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -5501,11 +5619,11 @@ char settings_menu_parent(char group) {
 
 byte settings_menu(char group) {
 
-  // Returns 1 to leave command mode (X, the command button, or B on the top level), 0 to stay (an adapter command
-  // was run: its answer shows in command mode).
+  // Returns 1 to leave command mode (X, the command button, or B on the top level), 0 to stay. An adapter command
+  // run from here shows its answer, then the menu comes back where it was.
 
-  byte cursor = (group == 0) ? 0 : 1;
-  byte back_cursor[2] = {0, 1};                    // where to put the cursor on going back to the top level / to VBand
+  byte cursor = 0;
+  byte back_cursor[2] = {0, 0};                    // where to put the cursor on going back to the top level / to VBand
   byte top = 0;
   byte editing = 0;
   int edit_value = 0;
@@ -5514,8 +5632,8 @@ byte settings_menu(char group) {
   settings_menu_row row;
 
   #ifdef FEATURE_VBAND_LINK
-    if ((group == 'V') && (!settings_adapter_fetch())) {
-      lcd_center_print_timed("VBand no answer", 0, default_display_msg_delay);
+    if ((group == 'V') && (!vband_link_up)) {
+      lcd_center_print_timed("No VBand", 0, default_display_msg_delay);
       send_char('?', KEYER_NORMAL);
       return 0;
     }
@@ -5553,7 +5671,8 @@ byte settings_menu(char group) {
           top = 0;
         } else if (row.type == 'g') {
           #ifdef FEATURE_VBAND_LINK
-            if ((row.target == 'V') && (!settings_adapter_fetch())) {
+            if (((row.target == 'V') && (!vband_link_up)) ||
+                (((row.target == 'v') || (row.target == 'c')) && (!settings_adapter_fetch((row.target == 'c') ? 'a' : 's')))) {
               lcd_center_print_timed("VBand no answer", 0, default_display_msg_delay);
               send_char('?', KEYER_NORMAL);
               break;
@@ -5561,7 +5680,7 @@ byte settings_menu(char group) {
           #endif
           back_cursor[group ? 1 : 0] = cursor;
           group = row.target;
-          cursor = 1;
+          cursor = 0;
           top = 0;
         } else if (row.type == 'b') {
           settings_menu_save(group, row, !row.value);
@@ -5578,12 +5697,13 @@ byte settings_menu(char group) {
               send_char('?', KEYER_NORMAL);
             }
           #endif
-        } else if (row.type == 'a') {
-          settings_menu_close();
+        } else if (row.type == 'a') {             // run it, show the answer, then back here
           #ifdef FEATURE_VBAND_LINK
+            settings_menu_close();
             vband_link_send_command(settings_adapter_items[row.item].key);
+            if (settings_menu_show_answer()) {return 1;}
+            settings_adapter_fetch('a');           // the commands on offer can change (Connect / Disconnect)
           #endif
-          return 0;
         } else {
           editing = 1;
           edit_value = row.value;
@@ -5748,7 +5868,8 @@ void settings_cli_list(PRIMARY_SERIAL_CLS * port_to_use, char group) {
 
   #ifdef FEATURE_VBAND_LINK
     if (group == 'V') {
-      if (!settings_adapter_fetch()) {
+      for (byte half = 0; half < 2; half++) {
+      if (!settings_adapter_fetch(half ? 'a' : 's')) {
         port_to_use->println(F("vb: VBand adapter not answering"));
         return;
       }
@@ -5759,14 +5880,20 @@ void settings_cli_list(PRIMARY_SERIAL_CLS * port_to_use, char group) {
         } else {
           line = String("vb.") + s.key;
           while (line.length() < 12) {line.concat(' ');}
-          line.concat(settings_value_text(s.type, s.value, s.unit, -1));
+          line.concat(settings_value_text(s.type, s.value, settings_adapter_unit(x), -1));
         }
         while (line.length() < 24) {line.concat(' ');}
         line.concat(s.label);
         if (s.type == 'b') {line.concat(F(" (on/off)"));}
         if (s.type == 'n') {line.concat(String(" (") + s.min + "-" + s.max + ")");}
         if (s.type == 's') {line.concat(F(" (text, spaces removed)"));}
+        if (s.type == 'e') {
+          String options = settings_adapter_unit(x);
+          options.replace('|', ' ');
+          line.concat(" (" + options + ")");
+        }
         port_to_use->println(line);
+      }
       }
       return;
     }
@@ -5885,6 +6012,40 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
 #endif //FEATURE_COMMAND_LINE_INTERFACE
 
 #endif //FEATURE_SETTINGS_MENU
+
+//-------------------------------------------------------------------------------------------------------
+
+#if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
+  // Settings K3NG's configuration has no field for are kept in the bytes between it and the memories
+  // (memory_area_start leaves four), so adding one doesn't move the memories. 0xFF (never written) means defaults.
+  #define SETTINGS_EXTRAS_ADDRESS (sizeof(configuration) + 1)
+  #define SETTINGS_EXTRA_NO_PADDLE_ECHO 0x01
+#endif
+
+void settings_save_extras() {
+
+  #if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
+    byte extras = 0xFF;
+    #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+      if (!lcd_paddle_echo) {extras &= ~SETTINGS_EXTRA_NO_PADDLE_ECHO;}
+    #endif
+    EEPROM.update(SETTINGS_EXTRAS_ADDRESS, extras);
+  #endif
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void initialize_settings_menu() {
+
+  #if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
+    byte extras = EEPROM.read(SETTINGS_EXTRAS_ADDRESS);
+    #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+      lcd_paddle_echo = (extras & SETTINGS_EXTRA_NO_PADDLE_ECHO) ? 1 : 0;   // the bit is cleared to turn echo off
+    #endif
+  #endif
+
+}
 
 //-------------------------------------------------------------------------------------------------------
 
