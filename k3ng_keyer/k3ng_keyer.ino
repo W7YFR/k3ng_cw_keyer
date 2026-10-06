@@ -1962,7 +1962,7 @@ struct settings_keyer_item {                        // one of the keyer's own se
   char group;                                       // 'K' keyer, 'S' sidetone
   const char *key;
   const char *label;
-  char type;                                        // 'n' number, 'z' number where 0 is off, 'e' one of a list
+  char type;                                        // 'n' number, 'z' number where 0 is off, 'r' hundredths, 'b' on/off, 'e' one of a list
   int min;
   int max;
   int step;
@@ -1970,7 +1970,7 @@ struct settings_keyer_item {                        // one of the keyer's own se
 };
 struct settings_menu_row {                          // one row of the menu: a group, "< Back", a setting, an adapter command
   String label;
-  char type;                                        // 'g' group, 'k' back, 'b' 'n' 'z' 'e' settings, 'a' adapter command
+  char type;                                        // 'g' group, 'k' back, 'b' 'n' 'z' 'r' 'e' 's' settings, 'a' adapter command
   char target;                                      // the group to open ('g'), else the row's group
   int item;                                         // settings_keyer_items or settings_adapter_items index
   int value;
@@ -1982,8 +1982,8 @@ struct settings_menu_row {                          // one row of the menu: a gr
 struct settings_adapter_item {                      // one of the VBand adapter's settings or commands, as it listed them
   char key[7];
   char label[13];
-  char type;                                        // 'b' on/off, 'n' number, 'a' a command (key is the word)
-  int value;
+  char type;                                        // 'b' on/off, 'n' number, 's' text, 'a' a command (key is the word)
+  int value;                                        // for 's', its slot in settings_adapter_texts
   int min;
   int max;
   int step;
@@ -1991,11 +1991,15 @@ struct settings_adapter_item {                      // one of the VBand adapter'
 };
 
 #ifdef FEATURE_SETTINGS_MENU
-  #define SETTINGS_WORD_MAX 8
+  #define SETTINGS_WORD_MAX 16                      // a keyed word: a group, a setting, or a value (a name, say)
   byte *settings_keyer_mode = &configuration.keyer_mode;   // command mode points this at the mode it restores on exit
   #ifdef FEATURE_VBAND_LINK
-    #define SETTINGS_ADAPTER_MAX 14
+    #define SETTINGS_ADAPTER_MAX 16
+    #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
+    #define SETTINGS_TEXT_MAX 32
     settings_adapter_item settings_adapter_items[SETTINGS_ADAPTER_MAX];
+    char settings_adapter_texts[SETTINGS_ADAPTER_TEXTS][SETTINGS_TEXT_MAX + 1];
+    byte settings_adapter_text_count = 0;
     byte settings_adapter_count = 0;
     byte settings_adapter_listed = 0;               // the whole list ("SE") has come
     byte settings_adapter_reply = 0;                // answer to a read or set: 0 none yet, 1 value, 2 no such setting
@@ -4702,15 +4706,43 @@ void service_vband_link() {
 //   CLI "\$ [group[.key [value]]]"    - lists, shows or sets
 // Groups: KY keyer, ST sidetone, and VB for the VBand adapter's own settings, which it lists for us over the link.
 
+// A transmitter to choose (one beyond the first, by key or PTT line), and PTT lines to time, in this build.
+#if (ptt_tx_2 || tx_key_line_2 || ptt_tx_3 || tx_key_line_3 || ptt_tx_4 || tx_key_line_4 || ptt_tx_5 || tx_key_line_5 || ptt_tx_6 || tx_key_line_6)
+  #define SETTINGS_TX_CHOICE
+#endif
+#if (ptt_tx_1 || ptt_tx_2 || ptt_tx_3 || ptt_tx_4 || ptt_tx_5 || ptt_tx_6)
+  #define SETTINGS_PTT
+#endif
+
+// Only settings for what's built in: each is here only with the feature (or pins) it changes.
 const settings_keyer_item settings_keyer_items[] = {
-  {'K', "MODE", "Mode",       'e', 0, 0, 1, ""},
-  {'K', "WPM",  "Speed",      'n', wpm_limit_low, wpm_limit_high, 1, "wpm"},
+  {'K', "MODE",  "Mode",        'e', 0, 0, 1, ""},
+  {'K', "WPM",   "Speed",       'n', wpm_limit_low, wpm_limit_high, 1, "wpm"},
   #ifdef FEATURE_FARNSWORTH
-    {'K', "FW",   "Farnsworth", 'z', 0, wpm_limit_high, 1, "wpm"},
+    {'K', "FW",    "Farnsworth",  'z', 0, wpm_limit_high, 1, "wpm"},
   #endif
-  {'K', "WT",   "Weight",     'n', 10, 90, 1, ""},
-  {'S', "HZ",   "Pitch",      'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, "Hz"},
-  {'S', "MODE", "Sidetone",   'e', 0, 0, 1, ""},
+  {'K', "CWPM",  "Cmd speed",   'n', wpm_limit_low, wpm_limit_high, 1, "wpm"},
+  #ifdef FEATURE_POTENTIOMETER
+    {'K', "POT",   "Speed pot",   'b', 0, 1, 1, ""},
+  #endif
+  {'K', "WT",    "Weight",      'n', 10, 90, 1, ""},
+  {'K', "RATIO", "Dah ratio",   'r', 160, 800, 10, ""},
+  {'K', "REV",   "Paddle rev",  'b', 0, 1, 1, ""},
+  #ifdef FEATURE_AUTOSPACE
+    {'K', "ASPC",  "Autospace",   'b', 0, 1, 1, ""},
+  #endif
+  #ifdef FEATURE_MEMORIES
+    {'K', "RPT",   "Mem repeat",  'n', 0, 9900, 100, "ms"},
+  #endif
+  #ifdef SETTINGS_TX_CHOICE
+    {'K', "TX",    "Transmitter", 'e', 0, 0, 1, ""},
+  #endif
+  #ifdef SETTINGS_PTT
+    {'K', "LEAD",  "PTT lead",    'n', 0, 500, 10, "ms"},
+    {'K', "TAIL",  "PTT tail",    'n', 0, 1000, 10, "ms"},
+  #endif
+  {'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, "Hz"},
+  {'S', "MODE",  "Sidetone",    'e', 0, 0, 1, ""},
 };
 #define SETTINGS_KEYER_COUNT (sizeof(settings_keyer_items) / sizeof(settings_keyer_items[0]))
 
@@ -4775,21 +4807,60 @@ const char *settings_group_word(char group) {
 
 //-------------------------------------------------------------------------------------------------------
 
-byte settings_enum_count(byte item) {
+byte settings_tx_list(byte *txs) {
 
-  if (settings_keyer_items[item].group == 'K') {return sizeof(settings_keyer_modes);}
-  return sizeof(settings_sidetone_modes);
+  // the transmitters this build has (a key line or a PTT line), as 1-6
+
+  const byte lines[] = {(ptt_tx_1 || tx_key_line_1), (ptt_tx_2 || tx_key_line_2), (ptt_tx_3 || tx_key_line_3),
+                        (ptt_tx_4 || tx_key_line_4), (ptt_tx_5 || tx_key_line_5), (ptt_tx_6 || tx_key_line_6)};
+  byte count = 0;
+
+  for (byte x = 0; x < 6; x++) {
+    if (lines[x]) {txs[count++] = x + 1;}
+  }
+  return count;
 
 }
 
 //-------------------------------------------------------------------------------------------------------
 
-const char *settings_enum_text(byte item, byte option, byte word) {
+char settings_enum_kind(byte item) {
 
-  if (settings_keyer_items[item].group == 'K') {
-    return word ? settings_keyer_mode_words[option] : settings_keyer_mode_names[option];
+  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter
+
+  if (settings_keyer_items[item].group == 'S') {return 'S';}
+  return strcmp(settings_keyer_items[item].key, "TX") ? 'M' : 'T';
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_enum_count(byte item) {
+
+  byte txs[6];
+
+  switch (settings_enum_kind(item)) {
+    case 'M': return sizeof(settings_keyer_modes);
+    case 'S': return sizeof(settings_sidetone_modes);
   }
-  return word ? settings_sidetone_mode_words[option] : settings_sidetone_mode_names[option];
+  return settings_tx_list(txs);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+String settings_enum_text(byte item, byte option, byte word) {
+
+  // an option's name for the display, or (word) as it's keyed or typed
+
+  byte txs[6];
+
+  switch (settings_enum_kind(item)) {
+    case 'M': return word ? settings_keyer_mode_words[option] : settings_keyer_mode_names[option];
+    case 'S': return word ? settings_sidetone_mode_words[option] : settings_sidetone_mode_names[option];
+  }
+  settings_tx_list(txs);
+  return String(word ? "" : "TX ") + txs[option];
 
 }
 
@@ -4798,25 +4869,41 @@ const char *settings_enum_text(byte item, byte option, byte word) {
 int settings_keyer_get(byte item) {
 
   const settings_keyer_item &s = settings_keyer_items[item];
+  byte txs[6];
+  byte count;
 
-  if (s.group == 'K') {
-    if (!strcmp(s.key, "MODE")) {
-      for (byte x = 0; x < sizeof(settings_keyer_modes); x++) {
-        if (settings_keyer_modes[x] == *settings_keyer_mode) {return x;}
-      }
-      return 0;
+  if (s.type == 'e') {
+    switch (settings_enum_kind(item)) {
+      case 'M':
+        for (byte x = 0; x < sizeof(settings_keyer_modes); x++) {
+          if (settings_keyer_modes[x] == *settings_keyer_mode) {return x;}
+        }
+        return 0;
+      case 'S':
+        for (byte x = 0; x < sizeof(settings_sidetone_modes); x++) {
+          if (settings_sidetone_modes[x] == configuration.sidetone_mode) {return x;}
+        }
+        return 0;
     }
-    if (!strcmp(s.key, "WPM")) {return configuration.wpm;}
-    if (!strcmp(s.key, "FW")) {return configuration.wpm_farnsworth;}
-    if (!strcmp(s.key, "WT")) {return configuration.weighting;}
-  } else {
-    if (!strcmp(s.key, "HZ")) {return configuration.hz_sidetone;}
-    if (!strcmp(s.key, "MODE")) {
-      for (byte x = 0; x < sizeof(settings_sidetone_modes); x++) {
-        if (settings_sidetone_modes[x] == configuration.sidetone_mode) {return x;}
-      }
+    count = settings_tx_list(txs);
+    for (byte x = 0; x < count; x++) {
+      if (txs[x] == configuration.current_tx) {return x;}
     }
+    return 0;
   }
+
+  if (!strcmp(s.key, "WPM")) {return configuration.wpm;}
+  if (!strcmp(s.key, "FW")) {return configuration.wpm_farnsworth;}
+  if (!strcmp(s.key, "CWPM")) {return configuration.wpm_command_mode;}
+  if (!strcmp(s.key, "POT")) {return configuration.pot_activated;}
+  if (!strcmp(s.key, "WT")) {return configuration.weighting;}
+  if (!strcmp(s.key, "RATIO")) {return configuration.dah_to_dit_ratio;}
+  if (!strcmp(s.key, "REV")) {return (configuration.paddle_mode == PADDLE_REVERSE);}
+  if (!strcmp(s.key, "ASPC")) {return configuration.autospace_active;}
+  if (!strcmp(s.key, "RPT")) {return configuration.memory_repeat_time;}
+  if (!strcmp(s.key, "LEAD")) {return configuration.ptt_lead_time[configuration.current_tx - 1];}
+  if (!strcmp(s.key, "TAIL")) {return configuration.ptt_tail_time[configuration.current_tx - 1];}
+  if (!strcmp(s.key, "HZ")) {return configuration.hz_sidetone;}
   return 0;
 
 }
@@ -4826,28 +4913,43 @@ int settings_keyer_get(byte item) {
 void settings_keyer_set(byte item, int value) {
 
   const settings_keyer_item &s = settings_keyer_items[item];
+  byte txs[6];
 
   if (s.type == 'e') {
     value = constrain(value, 0, settings_enum_count(item) - 1);
-  } else {
-    value = constrain(value, s.min, s.max);
+    switch (settings_enum_kind(item)) {
+      case 'M':
+        *settings_keyer_mode = settings_keyer_modes[value];
+        if ((*settings_keyer_mode == IAMBIC_A) || (*settings_keyer_mode == IAMBIC_B) || (*settings_keyer_mode == ULTIMATIC)) {
+          configuration.dit_buffer_off = 0;
+          configuration.dah_buffer_off = 0;
+        }
+        break;
+      case 'S':
+        configuration.sidetone_mode = settings_sidetone_modes[value];
+        break;
+      default:
+        settings_tx_list(txs);
+        switch_to_tx_silent(txs[value]);
+        break;
+    }
+    config_dirty = 1;
+    return;
   }
 
-  if (s.group == 'K') {
-    if (!strcmp(s.key, "MODE")) {
-      *settings_keyer_mode = settings_keyer_modes[value];
-      if ((*settings_keyer_mode == IAMBIC_A) || (*settings_keyer_mode == IAMBIC_B) || (*settings_keyer_mode == ULTIMATIC)) {
-        configuration.dit_buffer_off = 0;
-        configuration.dah_buffer_off = 0;
-      }
-    }
-    if (!strcmp(s.key, "WPM")) {speed_set(value);}
-    if (!strcmp(s.key, "FW")) {configuration.wpm_farnsworth = value;}
-    if (!strcmp(s.key, "WT")) {configuration.weighting = value;}
-  } else {
-    if (!strcmp(s.key, "HZ")) {configuration.hz_sidetone = value;}
-    if (!strcmp(s.key, "MODE")) {configuration.sidetone_mode = settings_sidetone_modes[value];}
-  }
+  value = constrain(value, s.min, s.max);
+  if (!strcmp(s.key, "WPM")) {speed_set(value);}
+  if (!strcmp(s.key, "FW")) {configuration.wpm_farnsworth = value;}
+  if (!strcmp(s.key, "CWPM")) {configuration.wpm_command_mode = value;}
+  if (!strcmp(s.key, "POT")) {configuration.pot_activated = value;}
+  if (!strcmp(s.key, "WT")) {configuration.weighting = value;}
+  if (!strcmp(s.key, "RATIO")) {configuration.dah_to_dit_ratio = value;}
+  if (!strcmp(s.key, "REV")) {configuration.paddle_mode = value ? PADDLE_REVERSE : PADDLE_NORMAL;}
+  if (!strcmp(s.key, "ASPC")) {configuration.autospace_active = value;}
+  if (!strcmp(s.key, "RPT")) {configuration.memory_repeat_time = value;}
+  if (!strcmp(s.key, "LEAD")) {configuration.ptt_lead_time[configuration.current_tx - 1] = value;}
+  if (!strcmp(s.key, "TAIL")) {configuration.ptt_tail_time[configuration.current_tx - 1] = value;}
+  if (!strcmp(s.key, "HZ")) {configuration.hz_sidetone = value;}
   config_dirty = 1;
 
 }
@@ -4858,10 +4960,20 @@ String settings_value_text(char type, int value, const char *unit, int keyer_ite
 
   // keyer_item: which settings_keyer_items entry, for an enum's names
 
+  char hundredths[8];
+
   switch (type) {
     case 'b': return value ? "On" : "Off";
     case 'e': return settings_enum_text(keyer_item, value, 0);
     case 'z': if (value == 0) {return "Off";} break;
+    case 'r':
+      snprintf(hundredths, sizeof(hundredths), "%d.%02d", value / 100, value % 100);
+      return hundredths;
+    case 's':
+      #ifdef FEATURE_VBAND_LINK
+        if ((value >= 0) && (value < SETTINGS_ADAPTER_TEXTS)) {return settings_adapter_texts[value];}
+      #endif
+      return "";
     case 'a': return "";
   }
   return String(value) + unit;
@@ -4872,20 +4984,22 @@ String settings_value_text(char type, int value, const char *unit, int keyer_ite
 
 byte settings_parse_value(char type, const char *token, int keyer_item, int *value) {
 
-  // a value as keyed or typed: a number, ON / OFF, or an enum's word (A, B, ULT...); returns 0 if it isn't one
+  // a value as keyed or typed: a number (hundredths as "3.00" or 300), ON / OFF, or an option's word (A, B,
+  // ULT...); returns 0 if it isn't one
 
+  if (type == 'e') {
+    for (byte x = 0; x < settings_enum_count(keyer_item); x++) {
+      if (!strcasecmp(token, settings_enum_text(keyer_item, x, 1).c_str())) {*value = x; return 1;}
+    }
+    return 0;
+  }
   if (isdigit(token[0])) {
-    *value = atoi(token);
-    return (type != 'e');
+    *value = ((type == 'r') && strchr(token, '.')) ? (int)(atof(token) * 100 + 0.5) : atoi(token);
+    return 1;
   }
   if ((type == 'b') || (type == 'z')) {
     if (!strcasecmp(token, "OFF")) {*value = 0; return 1;}
     if ((type == 'b') && (!strcasecmp(token, "ON"))) {*value = 1; return 1;}
-  }
-  if (type == 'e') {
-    for (byte x = 0; x < settings_enum_count(keyer_item); x++) {
-      if (!strcasecmp(token, settings_enum_text(keyer_item, x, 1))) {*value = x; return 1;}
-    }
   }
   return 0;
 
@@ -4926,9 +5040,19 @@ void settings_adapter_frame(const char *type, char *fields) {
     if (count < 2) {return;}
     if (field[1][0] == '?') {
       settings_adapter_reply = 2;
-    } else {
-      settings_adapter_reply_value = atoi(field[1]);
-      settings_adapter_reply = 1;
+      return;
+    }
+    settings_adapter_reply_value = atoi(field[1]);
+    settings_adapter_reply = 1;
+    for (byte x = 0; x < settings_adapter_count; x++) {   // keep the cached value in step
+      settings_adapter_item &item = settings_adapter_items[x];
+      if ((item.type == 'a') || strcasecmp(item.key, field[0])) {continue;}
+      if (item.type != 's') {
+        item.value = settings_adapter_reply_value;
+      } else if ((item.value >= 0) && (item.value < SETTINGS_ADAPTER_TEXTS)) {
+        strncpy(settings_adapter_texts[item.value], field[1], SETTINGS_TEXT_MAX);
+        settings_adapter_texts[item.value][SETTINGS_TEXT_MAX] = 0;
+      }
     }
   } else if (count >= 4) {
     index = atoi(field[0]);
@@ -4940,6 +5064,14 @@ void settings_adapter_frame(const char *type, char *fields) {
     item.label[sizeof(item.label) - 1] = 0;
     item.type = field[3][0];
     item.value = (count > 4) ? atoi(field[4]) : 0;
+    if (item.type == 's') {                         // the text goes in a slot of its own
+      item.value = -1;
+      if (settings_adapter_text_count < SETTINGS_ADAPTER_TEXTS) {
+        item.value = settings_adapter_text_count++;
+        strncpy(settings_adapter_texts[item.value], (count > 4) ? field[4] : "", SETTINGS_TEXT_MAX);
+        settings_adapter_texts[item.value][SETTINGS_TEXT_MAX] = 0;
+      }
+    }
     item.min = (count > 5) ? atoi(field[5]) : 0;
     item.max = (count > 6) ? atoi(field[6]) : 0;
     item.step = (count > 7) ? atoi(field[7]) : 1;
@@ -4963,6 +5095,7 @@ byte settings_adapter_fetch() {
 
   if (!vband_link_up) {return 0;}
   settings_adapter_count = 0;
+  settings_adapter_text_count = 0;
   settings_adapter_listed = 0;
   vband_link_send("SL");
   while ((!settings_adapter_listed) && ((millis() - asked_time) < 2000)) {
@@ -4985,24 +5118,31 @@ int settings_adapter_find(const char *key) {
 
 //-------------------------------------------------------------------------------------------------------
 
-byte settings_adapter_set(const char *key, int value) {
+byte settings_adapter_set_text(const char *key, const char *value) {
 
-  // returns 1 once the adapter has it (the cached item then holds what it kept), 0 for no answer
+  // returns 1 once the adapter has it (its answer updates the cached item with what it kept), 0 for no answer
 
-  char frame[24];
+  char frame[12 + SETTINGS_TEXT_MAX];
   unsigned long asked_time = millis();
-  int item;
 
-  snprintf(frame, sizeof(frame), "SS,%s,%d", key, value);
+  snprintf(frame, sizeof(frame), "SS,%s,%s", key, value);
   settings_adapter_reply = 0;
   vband_link_send(frame);
   while ((!settings_adapter_reply) && ((millis() - asked_time) < 1000)) {
     service_vband_link();
   }
-  if (settings_adapter_reply != 1) {return 0;}
-  item = settings_adapter_find(key);
-  if (item >= 0) {settings_adapter_items[item].value = settings_adapter_reply_value;}
-  return 1;
+  return (settings_adapter_reply == 1);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_adapter_set(const char *key, int value) {
+
+  char text[8];
+
+  itoa(value, text, 10);
+  return settings_adapter_set_text(key, text);
 
 }
 #endif //FEATURE_VBAND_LINK
@@ -5028,7 +5168,12 @@ byte settings_apply(char group, const char *key, const char *value_token, String
         return 0;
       }
       settings_adapter_item &s = settings_adapter_items[item];
-      if (value_token) {
+      if (value_token && (s.type == 's')) {
+        if ((!value_token[0]) || (!settings_adapter_set_text(s.key, value_token))) {
+          text = value_token[0] ? "VBand no answer" : "Empty value";
+          return 0;
+        }
+      } else if (value_token) {
         if (!settings_parse_value(s.type, value_token, -1, &value)) {
           text = String("Bad value ") + value_token;
           return 0;
@@ -5198,6 +5343,9 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
       line.concat(row.label);
       value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit, row.item);
       if ((row.type == 'g') || (row.type == 'k')) {value = "";}
+      if ((line.length() + 1 + value.length()) > LCD_COLUMNS) {        // a long name: as much as fits
+        value = value.substring(0, (LCD_COLUMNS > (line.length() + 1)) ? (LCD_COLUMNS - line.length() - 1) : 0);
+      }
       while ((line.length() + value.length()) < LCD_COLUMNS) {line.concat(' ');}
       line.concat(value);
     }
@@ -5314,6 +5462,19 @@ byte settings_menu(char group) {
           top = 0;
         } else if (row.type == 'b') {
           settings_menu_save(group, row, !row.value);
+        } else if (row.type == 's') {             // key the new text, ended by a word space
+          #ifdef FEATURE_VBAND_LINK
+            char text[SETTINGS_WORD_MAX + 1];
+            int length = settings_read_word(text, 10000, String(row.label) + ": ");
+            if (length == -2) {
+              settings_menu_close();
+              return 1;
+            }
+            if ((length > 0) && (!settings_adapter_set_text(settings_adapter_items[row.item].key, text))) {
+              lcd_center_print_timed("VBand no answer", 0, default_display_msg_delay);
+              send_char('?', KEYER_NORMAL);
+            }
+          #endif
         } else if (row.type == 'a') {
           settings_menu_close();
           #ifdef FEATURE_VBAND_LINK
@@ -5367,7 +5528,7 @@ int settings_read_word(char *word, unsigned int first_timeout_ms, const String &
     if (cw_char == 0) {break;}
     if (cw_char == 9) {return -2;}
     character = convert_cw_number_to_ascii(cw_char);
-    if (!(((character >= 'A') && (character <= 'Z')) || ((character >= '0') && (character <= '9')))) {
+    if (!(((character >= 'A') && (character <= 'Z')) || ((character >= '0') && (character <= '9')) || (character == '/'))) {
       send_char('?', KEYER_NORMAL);
       return -1;
     }
@@ -5501,6 +5662,7 @@ void settings_cli_list(PRIMARY_SERIAL_CLS * port_to_use, char group) {
         line.concat(s.label);
         if (s.type == 'b') {line.concat(F(" (on/off)"));}
         if (s.type == 'n') {line.concat(String(" (") + s.min + "-" + s.max + ")");}
+        if (s.type == 's') {line.concat(F(" (text, spaces removed)"));}
         port_to_use->println(line);
       }
       return;
@@ -5522,6 +5684,10 @@ void settings_cli_list(PRIMARY_SERIAL_CLS * port_to_use, char group) {
         if (y) {line.concat(' ');}
         line.concat(settings_enum_text(x, y, 1));
       }
+    } else if (s.type == 'b') {
+      line.concat("on/off");
+    } else if (s.type == 'r') {
+      line.concat(settings_value_text('r', s.min, "", x) + "-" + settings_value_text('r', s.max, "", x));
     } else {
       line.concat(String((s.type == 'z') ? 0 : s.min) + "-" + s.max + ((s.type == 'z') ? ", 0 off" : ""));
     }
@@ -5539,8 +5705,9 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
   // a value ("ky.wpm 22", "vb.led off")
 
   String input = "";
-  char line[40];
-  char *token[3];
+  char line[60];
+  char *token[2];
+  char *value = NULL;
   byte tokens = 0;
   byte incoming;
   char group;
@@ -5572,10 +5739,24 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
   }
   port_to_use->println();
 
-  input.replace('.', ' ');
-  input.toUpperCase();
   input.toCharArray(line, sizeof(line));
-  for (char *c = strtok(line, " "); c && (tokens < 3); c = strtok(NULL, " ")) {token[tokens++] = c;}
+  token[0] = strtok(line, " .");                   // group and setting; the rest of the line is the value, as typed
+  if (token[0]) {
+    tokens = 1;
+    token[1] = strtok(NULL, " .");
+    if (token[1]) {
+      tokens = 2;
+      value = strtok(NULL, "");
+    }
+  }
+  if (value) {                                     // no spaces or commas in a value ("Rob W7YFR" -> "RobW7YFR")
+    char *to = value;
+    for (char *from = value; *from; from++) {
+      if ((*from != ' ') && (*from != ',')) {*to++ = *from;}
+    }
+    *to = 0;
+    if (!value[0]) {value = NULL;}
+  }
 
   if (tokens == 0) {
     settings_cli_list(port_to_use, 'K');
@@ -5594,7 +5775,7 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
     settings_cli_list(port_to_use, group);
     return;
   }
-  settings_apply(group, token[1], (tokens > 2) ? token[2] : NULL, text);
+  settings_apply(group, token[1], value, text);
   port_to_use->println(text);
 
 }
