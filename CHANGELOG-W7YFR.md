@@ -23,6 +23,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `fix/i2c-wire-timeout` | `fix/oled-nonblocking-redraw` | A stuck I2C bus no longer freezes the keyer |
 | `feature/vband-link` | `feature/oled-font-select` | `FEATURE_VBAND_LINK`: the link to the ESP32 VBand adapter |
 | `feature/settings-menu` | `feature/vband-link` | `FEATURE_SETTINGS_MENU`: settings menu, shortcuts and CLI |
+| `fix/async-eeprom-write-overrun` | `master` | The background settings write no longer writes one byte past the settings |
 | `fix/exclamation-mark` | `master` | `!` sent and decoded as `-.-.--` |
 | `fix/punctuation-decode` | `fix/exclamation-mark` | `;` `$` `'` `"` `_` `)` decode from the paddles |
 | `feature/extra-button` | `master` | `EXTRA_BUTTONS`: buttons beyond the command and memory buttons |
@@ -42,6 +43,15 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 Below, newest first, each entry names its branch. Dates are when the work was merged into `w7yfr`.
 
 ## Unreleased
+
+### Fixed
+- `fix/async-eeprom-write-overrun`: K3NG's background settings write (`service_async_eeprom_write`) wrote one byte
+  too many, putting whatever follows the configuration in RAM into the EEPROM byte after it. Upstream `master` has
+  the same bug.
+- `feature/settings-menu`: settings changed from the menu or the CLI survive a power cycle. They're saved as soon as
+  the keyer is idle, instead of waiting until 30 s after the last save (`eeprom_write_time_ms`), so a change made
+  just before power-off was lost. Paddle echo moved to the next spare EEPROM byte, away from the one the
+  background write overran, which turned it off after each save.
 
 ## 2026-10-05: settings menu and punctuation
 
