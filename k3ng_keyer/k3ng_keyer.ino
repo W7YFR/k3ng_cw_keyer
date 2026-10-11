@@ -3077,6 +3077,8 @@ void service_keypad(){
     static byte space_sent = 0;
     #if defined(FEATURE_COMMAND_LINE_INTERFACE) && defined(FEATURE_STRAIGHT_KEY_ECHO)
       static byte screen_column = 0;
+    #endif
+    #ifdef DEBUG_FEATURE_STRAIGHT_KEY_ECHO
       static int last_printed_decoder_wpm = 0;
     #endif
 
@@ -3245,6 +3247,7 @@ void service_keypad(){
             } else {
               primary_serial_port->write(prosign_char[0]);
               primary_serial_port->write(prosign_char[1]);
+              if (prosign_char[2]) {primary_serial_port->write(prosign_char[2]);}
             }
             #ifdef FEATURE_COMMAND_LINE_INTERFACE_ON_SECONDARY_PORT
               if (cw_ascii_temp){
@@ -3252,6 +3255,7 @@ void service_keypad(){
               } else {
                 secondary_serial_port->write(prosign_char[0]);
                 secondary_serial_port->write(prosign_char[1]);
+                if (prosign_char[2]) {secondary_serial_port->write(prosign_char[2]);}
               }
             #endif
             screen_column++;
@@ -3265,6 +3269,7 @@ void service_keypad(){
             } else {
               display_scroll_print_char(prosign_char[0]);
               display_scroll_print_char(prosign_char[1]);
+              if (prosign_char[2]) {display_scroll_print_char(prosign_char[2]);}
             }
           }
         #endif //FEATURE_DISPLAY
@@ -7693,7 +7698,9 @@ void command_mode() {
     wdt_disable();
   #endif //OPTION_WATCHDOG_TIMER
 
-  char weight_deci[] = "00";
+  #ifdef FEATURE_DISPLAY
+    char weight_deci[] = "00";                           // only the display's status uses it
+  #endif
   byte looping;
   byte button_that_was_pressed = 0;
   byte paddle_hit = 0;
@@ -9728,10 +9735,6 @@ void send_the_dits_and_dahs(char const * cw_to_send){
 
   #if defined(FEATURE_SERIAL) && !defined(OPTION_DISABLE_SERIAL_PORT_CHECKING_WHILE_SENDING_CW)
     dump_current_character_flag = 0;
-  #endif
-
-  #if defined(FEATURE_FARNSWORTH)
-    float additional_intercharacter_time_ms;
   #endif
 
   for (int x = 0;x < 12;x++){
@@ -16502,7 +16505,7 @@ char * convert_prosign(byte prosign_code) {
     case PROSIGN_SK: return((char*)"SK"); break;
     case PROSIGN_SN: return((char*)"SN"); break;
     case PROSIGN_HH: return((char*)"HH"); break;              // iz0rus
-    case PROSIGN_SOS: send_the_dits_and_dahs("...---..."); break;
+    case PROSIGN_SOS: return((char*)"SOS"); break;   // its letters, like the others; sending it is send_char()'s job
     case PROSIGN_SO:  return((char*)"SO");  break;
     #if !defined(OPTION_CW_KEYBOARD_GERMAN) && !defined(OPTION_CW_KEYBOARD_ITALIAN) && !defined(OPTION_PS2_NON_ENGLISH_CHAR_LCD_DISPLAY_SUPPORT)
       case PROSIGN_OS: return((char*)"OS"); break;
@@ -17085,7 +17088,9 @@ byte play_memory(byte memory_number) {
   unsigned int jump_back_to_y = 9999;
   byte jump_back_to_memory_number = 255;
   static byte prosign_flag = 0;
-  static byte prosign_before_flag = 0;
+  #ifdef FEATURE_DISPLAY
+    static byte prosign_before_flag = 0;                 // only the display's echo uses it
+  #endif
   byte eeprom_byte_read = 0;
   byte pause_sending_buffer_backspace = 0;
 
@@ -17250,6 +17255,7 @@ byte play_memory(byte memory_number) {
                     if ((eeprom_temp > PROSIGN_START) && (eeprom_temp < PROSIGN_END)){
                       display_scroll_print_char(prosign_temp[0]);
                       display_scroll_print_char(prosign_temp[1]);
+                      if (prosign_temp[2]) {display_scroll_print_char(prosign_temp[2]);}
                     } else {
                       if (prosign_flag){
                         display_scroll_print_char(eeprom_byte_read);
@@ -19032,7 +19038,7 @@ void blink_ptt_dits_and_dahs(char const * cw_to_send){
 
   sending_mode = AUTOMATIC_SENDING;
 
-  for (int x = 0;x < strlen(cw_to_send);x++){
+  for (unsigned int x = 0;x < strlen(cw_to_send);x++){
     switch(cw_to_send[x]){
       case '.':
         ptt_key();
@@ -20191,9 +20197,11 @@ int paddle_pin_read(int pin_to_read){
           case 8: return(bitRead(PINB, 0)); break;
         }                                                     // end switch
       #endif                                                  // OPTION_SAVE_MEMORY_NANOKEYER
-      #if !defined(OPTION_DIRECT_PADDLE_PIN_READS_UNO) && !defined(OPTION_DIRECT_PADDLE_PIN_READS_MEGA) && !defined(OPTION_SAVE_MEMORY_NANOKEYER)
-        return digitalRead(pin_to_read);                      // code using digitalRead
-      #endif                                                  // !defined(OPTION_DIRECT_PADDLE_PIN_READS_UNO) && !defined(OPTION_DIRECT_PADDLE_PIN_READS_MEGA)
+      #ifdef OPTION_SAVE_MEMORY_NANOKEYER
+        return HIGH;                                          // not one of its paddle pins: never pressed (no digitalRead, to save memory)
+      #else
+        return digitalRead(pin_to_read);                      // code using digitalRead (also for a pin the direct reads above don't cover)
+      #endif
     #else                                                     // !OPTION_INVERT_PADDLE_PIN_LOGIC
       return !digitalRead(pin_to_read);                       // we do the regular digitalRead() if none of the direct register read options are valid
     #endif                                                    // !OPTION_INVERT_PADDLE_PIN_LOGIC
