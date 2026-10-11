@@ -1540,13 +1540,22 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 #include "keyer_dependencies.h"
 #include "keyer_debug.h"
 
-// Forward declaration - convert_prosign() is called before its definition (e.g. from
-// service_paddle_echo() and service_straight_key()), and the Arduino/PlatformIO
-// auto-prototype generator does not emit a prototype for functions defined inside a
-// conditional block, so declare it explicitly.
+// Forward declarations - these functions are called before their definitions, and the
+// Arduino/PlatformIO auto-prototype generator does not emit prototypes for functions
+// defined inside conditional blocks (or indented), so declare them explicitly.
 #if defined(OPTION_PROSIGN_SUPPORT)
   char * convert_prosign(byte prosign_code);
 #endif //OPTION_PROSIGN_SUPPORT
+#if defined(FEATURE_STRAIGHT_KEY)
+  long service_straight_key();
+#endif //FEATURE_STRAIGHT_KEY
+#if defined(FEATURE_BEACON_SETTING)
+  void service_beacon();
+#endif //FEATURE_BEACON_SETTING
+#if defined(FEATURE_SO2R_SWITCHES)
+  void so2r_switches();
+#endif //FEATURE_SO2R_SWITCHES
+void sidetone_adj(int hz);
 
 #if defined(HARDWARE_OPENCWKEYER_MK2)
   #include "keyer_pin_settings_opencwkeyer_mk2.h"
