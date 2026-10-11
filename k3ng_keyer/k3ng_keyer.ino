@@ -2014,7 +2014,7 @@ struct settings_keyer_item {                        // one of the keyer's own se
 };
 struct settings_menu_row {                          // one row of the menu: a group, "< Back", a setting, an adapter command
   String label;
-  char type;                                        // 'g' group, 'k' back, 'b' 'n' 'z' 'r' 'e' 's' settings, 'a' adapter command
+  char type;                                        // 'g' group, 'k' back, 'x' exit, 'b' 'n' 'z' 'r' 'e' 's' settings, 'a' adapter command
   char target;                                      // the group to open ('g'), else the row's group
   int item;                                         // settings_keyer_items or settings_adapter_items index
   int value;
@@ -2038,6 +2038,7 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   #define SETTINGS_WORD_MAX 16                      // a keyed word: a group, a setting, or a value (a name, say)
   byte *settings_keyer_mode = &configuration.keyer_mode;   // command mode points this at the mode it restores on exit
   byte settings_menu_wake = 0;                      // 1 while the menu waits for a key, 2 once it has something new to show
+  byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
     #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
@@ -5482,7 +5483,7 @@ byte settings_menu_count(char group) {
     #ifdef FEATURE_VBAND_LINK
       if (vband_link_up) {count++;}
     #endif
-    return count + 2;
+    return count + 3;                              // Exit, Keyer, Sidetone
   }
   #ifdef FEATURE_VBAND_LINK
     if (group == 'V') {return 3;}                  // Commands, Settings, "< Back"
@@ -5513,6 +5514,17 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
   out.step = 1;
   out.unit = "";
 
+  if (row == 0) {                                  // first: "Exit" on the top level, "< Back" elsewhere (lists open on row 1)
+    if (group == 0) {
+      out.type = 'x';
+      out.label = "< Exit";
+    } else {
+      out.label = "< Back";
+    }
+    return;
+  }
+  row--;
+
   if (group == 0) {
     const char groups[] = {
       #ifdef FEATURE_VBAND_LINK
@@ -5526,11 +5538,6 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
     out.type = 'g';
     out.target = groups[first + row];
     out.label = settings_group_name(out.target);
-    return;
-  }
-
-  if (row == settings_menu_count(group) - 1) {    // "< Back" last, so a list opens on its first item
-    out.label = "< Back";
     return;
   }
 
@@ -5602,7 +5609,7 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
       line.concat(row.label);
       value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit,
                                   ((group == 'v') || (group == 'c')) ? -1 : row.item);
-      if ((row.type == 'g') || (row.type == 'k')) {value = "";}
+      if ((row.type == 'g') || (row.type == 'k') || (row.type == 'x')) {value = "";}
       if ((line.length() + 1 + value.length()) > LCD_COLUMNS) {        // a long name: as much as fits
         value = value.substring(0, (LCD_COLUMNS > (line.length() + 1)) ? (LCD_COLUMNS - line.length() - 1) : 0);
       }
@@ -5691,14 +5698,25 @@ char settings_menu_parent(char group) {
 
 //-------------------------------------------------------------------------------------------------------
 
+byte settings_menu_top(char group, byte cursor) {
+
+  // The first row shown: a list opens on row 1 with its first row (Exit or "< Back") scrolled off the top, when the
+  // rest wouldn't fit on screen with it; a dah from row 1 scrolls it into view.
+
+  return (cursor && ((settings_menu_count(group) - 1) >= (LCD_ROWS - 1))) ? 1 : 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 byte settings_menu(char group) {
 
   // Returns 1 to leave command mode (X, the command button, or B on the top level), 0 to stay. An adapter command
   // run from here shows its answer, then the menu comes back where it was.
 
-  byte cursor = 0;
-  byte back_cursor[2] = {0, 0};                    // where to put the cursor on going back to the top level / to VBand
-  byte top = 0;
+  byte cursor = 1;                                 // row 0 is Exit / "< Back"
+  byte back_cursor[2] = {1, 1};                    // where to put the cursor on going back to the top level / to VBand
+  byte top = settings_menu_top(group, cursor);
   byte editing = 0;
   int edit_value = 0;
   long cw_char;
@@ -5724,20 +5742,20 @@ byte settings_menu(char group) {
         if (!vband_link_up) {note = "Adapter off";}
         if ((!vband_link_up) && ((group == 'V') || (group == 'v') || (group == 'c'))) {   // its pages are gone
           group = 0;
-          cursor = 0;
+          cursor = 1;
           editing = 0;
-        } else if (!group) {                       // its row, first on the top level, came or went
+        } else if (!group) {                       // its row, just below Exit, came or went
           if (vband_link_up) {
-            cursor++;
-          } else if (cursor) {
+            if (cursor) {cursor++;}
+          } else if (cursor > 1) {
             cursor--;
           }
         }
-        top = 0;
+        top = settings_menu_top(group, cursor);
       }
     #endif
     count = settings_menu_count(group);
-    if (cursor >= count) {cursor = 0;}
+    if (cursor >= count) {cursor = 1;}
     settings_menu_draw(group, cursor, top, editing, edit_value, note);
     settings_menu_get_row(group, cursor, row);
     settings_menu_wake = 1;
@@ -5766,10 +5784,13 @@ byte settings_menu(char group) {
         if (editing) {
           settings_menu_save(group, row, edit_value);
           editing = 0;
+        } else if (row.type == 'x') {
+          settings_menu_close();
+          return 1;
         } else if (row.type == 'k') {
           group = settings_menu_parent(group);
           cursor = back_cursor[group ? 1 : 0];
-          top = 0;
+          top = settings_menu_top(group, cursor);
         } else if (row.type == 'g') {
           #ifdef FEATURE_VBAND_LINK
             if (((row.target == 'V') && (!vband_link_up)) ||
@@ -5781,8 +5802,8 @@ byte settings_menu(char group) {
           #endif
           back_cursor[group ? 1 : 0] = cursor;
           group = row.target;
-          cursor = 0;
-          top = 0;
+          cursor = 1;
+          top = settings_menu_top(group, cursor);
         } else if (row.type == 'b') {
           settings_menu_save(group, row, !row.value);
         } else if (row.type == 's') {             // key the new text, ended by a word space
@@ -5816,7 +5837,7 @@ byte settings_menu(char group) {
         } else if (group) {
           group = settings_menu_parent(group);
           cursor = back_cursor[group ? 1 : 0];
-          top = 0;
+          top = settings_menu_top(group, cursor);
         } else {
           settings_menu_close();
           return 1;
@@ -5953,9 +5974,40 @@ byte settings_command(byte *keyer_mode_before) {
   byte result;
 
   settings_keyer_mode = keyer_mode_before;
-  result = settings_command_words();
+  result = settings_menu_on_entry ? settings_command_menu() : settings_command_words();
+  settings_menu_on_entry = 0;
   settings_keyer_mode = &configuration.keyer_mode;
   return result;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_command_menu() {
+
+  // the menu itself, for command mode entered to open it (settings_menu_open())
+
+  #ifdef FEATURE_DISPLAY
+    return settings_menu(0);
+  #else
+    return 0;
+  #endif
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void settings_menu_open() {
+
+  // Command mode with the menu already open, as if the command button had been pressed and then "/" keyed: for
+  // a gesture or button that opens the menu. The transmitter is off while in command mode, as with the button.
+
+  settings_menu_on_entry = 1;
+  command_mode_disable_tx = !key_tx;
+  key_tx = 0;
+  command_mode();
+  key_tx = command_mode_disable_tx ? 0 : 1;
+  settings_menu_on_entry = 0;
 
 }
 #endif //FEATURE_COMMAND_MODE
@@ -6142,8 +6194,8 @@ void settings_save_extras() {
 void initialize_settings_menu() {
 
   #if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
-    byte extras = EEPROM.read(SETTINGS_EXTRAS_ADDRESS);
     #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+      byte extras = EEPROM.read(SETTINGS_EXTRAS_ADDRESS);
       lcd_paddle_echo = (extras & SETTINGS_EXTRA_NO_PADDLE_ECHO) ? 1 : 0;   // the bit is cleared to turn echo off
     #endif
   #endif
@@ -9917,6 +9969,10 @@ void command_mode() {
 
   #if defined(FEATURE_WINKEY_EMULATION) && defined(OPTION_WINKEY_SEND_BREAKIN_STATUS_BYTE)
     winkey_breakin_status_byte_inhibit = 1;
+  #endif
+
+  #ifdef FEATURE_SETTINGS_MENU
+    if (settings_menu_on_entry && settings_command(&keyer_mode_before)) {stay_in_command_mode = 0;}   // entered for the menu (settings_menu_open())
   #endif
 
   while (stay_in_command_mode) {
