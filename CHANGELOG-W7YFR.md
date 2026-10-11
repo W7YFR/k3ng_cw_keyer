@@ -51,6 +51,11 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/vband-link`: the adapter's log on the keyer's USB port. With the adapter's `vb.log` on, each line it sends
   (`LG` / `LGP` frames) is printed with an `ESP> ` prefix, in any mode. Never waits on the port (a line that doesn't
   fit is dropped), and nothing is printed while the port is in Winkey mode.
+- `feature/settings-menu`: each list starts with "< Back" ("< Exit" on the top level, which leaves the menu and
+  command mode) and opens on its second row, with the first scrolled off the top when the rest fills the screen; a
+  dah scrolls it into view.
+- Only on `w7yfr` (`d55352e`): holding the dit paddle for 10 dits opens the settings menu (command mode with the menu
+  open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
 ### Fixed
 - `feature/vband-link`: command mode notices the adapter going (its goodbye, or the link timeout) instead of only
