@@ -86,7 +86,7 @@ int32_t ButtonArray::high_limit(){
 }
 
 int8_t ButtonArray::ReadButtons(){
-    uint32_t analog_read_temp = 0;
+    int32_t analog_read_temp = 0;   // analogRead() is 0-1023; signed, like the limits it's compared with
     uint32_t analog_line_read_average = 0;
     //uint8_t number_of_samples = 0;
 
@@ -124,7 +124,7 @@ int8_t ButtonArray::Pressed() {
 }
 // returns true if button at the provided index is pressed
 bool ButtonArray::Pressed(uint8_t index) {
-    uint32_t analog_read_temp =0;
+    int32_t analog_read_temp =0;
     analog_read_temp = analogRead(pin_);
     if ((analog_read_temp <= high_limit_) && ( index < nb_buttons_)) {
         Button button = button_array_[index];
