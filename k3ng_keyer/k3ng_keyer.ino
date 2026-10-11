@@ -1542,7 +1542,7 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 
 // Forward declarations - these functions are called before their definitions, and the
 // Arduino/PlatformIO auto-prototype generator does not emit prototypes for functions
-// defined inside conditional blocks, so declare them explicitly.
+// defined inside conditional blocks (or indented), so declare them explicitly.
 #if defined(FEATURE_STRAIGHT_KEY_ANY)
   byte straight_key_down();
   long service_straight_key();
@@ -1550,6 +1550,13 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 #if defined(OPTION_PROSIGN_SUPPORT)
   char * convert_prosign(byte prosign_code);
 #endif //OPTION_PROSIGN_SUPPORT
+#if defined(FEATURE_BEACON_SETTING)
+  void service_beacon();
+#endif //FEATURE_BEACON_SETTING
+#if defined(FEATURE_SO2R_SWITCHES)
+  void so2r_switches();
+#endif //FEATURE_SO2R_SWITCHES
+void sidetone_adj(int hz);
 
 #if defined(HARDWARE_OPENCWKEYER_MK2)
   #include "keyer_pin_settings_opencwkeyer_mk2.h"
