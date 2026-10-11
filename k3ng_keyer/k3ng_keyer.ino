@@ -6785,7 +6785,7 @@ void check_dit_paddle()
       }
     #endif
     #ifdef FEATURE_DIT_HOLD_RESET
-      if (dit_buffer == 0) {
+      if ((dit_buffer == 0) && (configuration.keyer_mode != STRAIGHT)) {   // straight mode clears dit_buffer every pass: a held key isn't dits
         dit_hold_counter++;
       }
     #endif //FEATURE_DIT_HOLD_RESET
