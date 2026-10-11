@@ -24,6 +24,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `feature/vband-link` | `feature/oled-font-select` | `FEATURE_VBAND_LINK`: the link to the ESP32 VBand adapter |
 | `feature/settings-menu` | `feature/vband-link` | `FEATURE_SETTINGS_MENU`: settings menu, shortcuts and CLI |
 | `fix/async-eeprom-write-overrun` | `master` | The background settings write no longer writes one byte past the settings |
+| `fix/straight-key-echo-without-cli` | `master` | Straight key echo to the display builds without the CLI |
 | `fix/exclamation-mark` | `master` | `!` sent and decoded as `-.-.--` |
 | `fix/punctuation-decode` | `fix/exclamation-mark` | `;` `$` `'` `"` `_` `)` decode from the paddles |
 | `feature/extra-button` | `master` | `EXTRA_BUTTONS`: buttons beyond the command and memory buttons |
@@ -37,6 +38,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `feature/straight-key-paddle` | `master` | `FEATURE_STRAIGHT_KEY_PADDLE`: the dit paddle as a straight key |
 | `feature/farnsworth-potentiometer` | `master` | `FEATURE_FARNSWORTH_POTENTIOMETER`: a pot for the Farnsworth speed |
 | `fix/prosign-forward-declaration` | `master` | Builds outside the Arduino IDE (`convert_prosign`) |
+| `fix/platformio-forward-declarations` | `fix/prosign-forward-declaration` | More functions declared ahead, so other boards' profiles build outside the Arduino IDE |
 | `build/platformio` | `master` | PlatformIO builds |
 | `chore/build-warnings` | `master` | Compiler warning cleanup |
 
@@ -52,6 +54,14 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   the keyer is idle, instead of waiting until 30 s after the last save (`eeprom_write_time_ms`), so a change made
   just before power-off was lost. Paddle echo moved to the next spare EEPROM byte, away from the one the
   background write overran, which turned it off after each save.
+- `fix/straight-key-echo-without-cli`: builds with `FEATURE_STRAIGHT_KEY_ECHO` and a display but without
+  `FEATURE_COMMAND_LINE_INTERFACE` no longer fail on `cli_straight_key_echo` (it was declared only with the CLI).
+  Upstream `master` has the same bug.
+- `fix/platformio-forward-declarations`: `service_beacon`, `service_straight_key`, `so2r_switches` and
+  `sidetone_adj` are declared ahead of their first use, so builds outside the Arduino IDE no longer fail with
+  "not declared in this scope" (seen with K3NG's `test-everything` and `megakeyer` profiles).
+- Only on `w7yfr` (`a50434a`): builds without `FEATURE_OLED_SSD1306` link again; the extra button's display toggle and
+  clear are only built with the OLED.
 
 ## 2026-10-05: settings menu and punctuation
 
