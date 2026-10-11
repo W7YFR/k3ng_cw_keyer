@@ -4311,6 +4311,10 @@ void vband_link_handle_frame() {
   fields = strchr(vband_link_rx_frame, ',');
   if (fields) {*fields++ = 0;} else {fields = star;}
 
+  if ((strcmp(vband_link_rx_frame, "LG") == 0) || (strcmp(vband_link_rx_frame, "LGP") == 0)) {   // the adapter's log, in any mode
+    vband_link_print_log(fields, vband_link_rx_frame[2] == 0);
+  }
+
   if (keyer_machine_mode != KEYER_NORMAL) {        // command mode etc.: just keep the link alive, see service_vband_link()
     if (strcmp(vband_link_rx_frame, "BYE") != 0) {
       vband_link_last_frame_time = millis();
@@ -4348,6 +4352,30 @@ void vband_link_handle_frame() {
       vband_link_show_system(fields);
     }
   #endif //FEATURE_DISPLAY
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_print_log(const char *text, byte line_ends) {
+
+  // "LG,<text>" ends a line of the adapter's log, "LGP,<text>" is part of a longer one. Printed on our USB port, so
+  // the adapter's log (its VB.LOG setting turns it on) can be read without reaching the adapter's own port. Never
+  // waits: a part that doesn't fit in the serial buffer is dropped, so keying timing isn't disturbed.
+
+  #if defined(FEATURE_SERIAL)
+    static byte at_line_start = 1;
+
+    if (primary_serial_port_mode != SERIAL_CLI) {return;}   // Winkey: the host isn't expecting text
+    if (primary_serial_port->availableForWrite() < (int)(strlen(text) + 7)) {
+      at_line_start = line_ends;
+      return;
+    }
+    if (at_line_start) {primary_serial_port->print(F("ESP> "));}
+    primary_serial_port->print(text);
+    if (line_ends) {primary_serial_port->println();}
+    at_line_start = line_ends;
+  #endif
 
 }
 
