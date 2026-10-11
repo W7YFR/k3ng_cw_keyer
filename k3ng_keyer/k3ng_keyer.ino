@@ -2037,6 +2037,7 @@ struct settings_adapter_item {                      // one of the VBand adapter'
 #ifdef FEATURE_SETTINGS_MENU
   #define SETTINGS_WORD_MAX 16                      // a keyed word: a group, a setting, or a value (a name, say)
   byte *settings_keyer_mode = &configuration.keyer_mode;   // command mode points this at the mode it restores on exit
+  byte settings_menu_wake = 0;                      // 1 while the menu waits for a key, 2 once it has something new to show
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
     #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
@@ -4461,6 +4462,10 @@ void vband_link_set_up(byte up) {
 
   if (up == vband_link_up) {return;}
 
+  #ifdef FEATURE_SETTINGS_MENU
+    if (settings_menu_wake) {settings_menu_wake = 2;}   // the menu adds or drops the adapter's pages
+  #endif
+
   if (up) {
     vband_link_up = 1;
     vband_link_enable_tx(1);
@@ -5569,10 +5574,10 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
 
 //-------------------------------------------------------------------------------------------------------
 
-void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int edit_value) {
+void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int edit_value, const char *note) {
 
-  // title on the top row, then as many rows as fit, keeping the cursor in view; '>' marks the cursor, '*' while
-  // its value is being changed
+  // title on the top row (or a note, in its place), then as many rows as fit, keeping the cursor in view; '>' marks
+  // the cursor, '*' while its value is being changed
 
   byte rows = LCD_ROWS - 1;
   byte count = settings_menu_count(group);
@@ -5583,7 +5588,7 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
   if (cursor < top) {top = cursor;}
   if (cursor >= (top + rows)) {top = cursor - rows + 1;}
 
-  lcd_center_print_timed(settings_group_name(group), 0, 60000);
+  lcd_center_print_timed(note ? note : settings_group_name(group), 0, 60000);
   for (byte x = 0; x < rows; x++) {
     line = "";
     if ((top + x) < count) {
@@ -5694,6 +5699,10 @@ byte settings_menu(char group) {
   long cw_char;
   byte count;
   settings_menu_row row;
+  const char *note = NULL;                         // in place of the title, until the next key
+  #ifdef FEATURE_VBAND_LINK
+    byte had_adapter = vband_link_up;
+  #endif
 
   #ifdef FEATURE_VBAND_LINK
     if ((group == 'V') && (!vband_link_up)) {
@@ -5704,13 +5713,36 @@ byte settings_menu(char group) {
   #endif
 
   while (1) {
+    #ifdef FEATURE_VBAND_LINK
+      if (vband_link_up != had_adapter) {          // the adapter came or went while the menu was open
+        had_adapter = vband_link_up;
+        if (!vband_link_up) {note = "Adapter off";}
+        if ((!vband_link_up) && ((group == 'V') || (group == 'v') || (group == 'c'))) {   // its pages are gone
+          group = 0;
+          cursor = 0;
+          editing = 0;
+        } else if (!group) {                       // its row, first on the top level, came or went
+          if (vband_link_up) {
+            cursor++;
+          } else if (cursor) {
+            cursor--;
+          }
+        }
+        top = 0;
+      }
+    #endif
     count = settings_menu_count(group);
     if (cursor >= count) {cursor = 0;}
-    settings_menu_draw(group, cursor, top, editing, edit_value);
+    settings_menu_draw(group, cursor, top, editing, edit_value, note);
     settings_menu_get_row(group, cursor, row);
+    settings_menu_wake = 1;
     cw_char = get_cw_input_from_user(0);
+    settings_menu_wake = 0;
+    if (cw_char) {note = NULL;}
 
     switch (cw_char) {
+      case 0:                                      // woken without a key: something changed, draw it again
+        break;
       case 1:                                      // E (dit) - down, or lower the value
       case 2:                                      // T (dah) - up, or raise the value
         if (editing) {
@@ -5766,7 +5798,7 @@ byte settings_menu(char group) {
             settings_menu_close();
             vband_link_send_command(settings_adapter_items[row.item].key);
             if (settings_menu_show_answer()) {return 1;}
-            settings_adapter_fetch('a');           // the commands on offer can change (Connect / Disconnect)
+            if (vband_link_up) {settings_adapter_fetch('a');}   // the commands on offer can change (Connect / Disconnect); /OFF: the loop goes back up
           #endif
         } else {
           editing = 1;
@@ -9753,6 +9785,9 @@ long get_cw_input_from_user(unsigned int exit_time_milliseconds) {
 
     #ifdef FEATURE_VBAND_LINK
       service_vband_link();                      // command mode can sit here a while; keep the adapter hearing us
+      #ifdef FEATURE_SETTINGS_MENU
+        if ((!paddle_hit) && (settings_menu_wake == 2)) {return 0;}   // the menu has something new to show
+      #endif
     #endif
 
     if (dit_buffer) {
