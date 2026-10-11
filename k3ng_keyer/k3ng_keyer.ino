@@ -2745,8 +2745,12 @@ void loop()
       #ifdef FEATURE_DIT_HOLD_RESET
         if (dit_hold_gesture_flag) {
           dit_hold_gesture_flag = 0;
-          lcd_clear();
-          display_scroll_reset();
+          #ifdef FEATURE_SETTINGS_MENU
+            settings_menu_open();                  // a run of dits opens the settings menu (the extra button clears the display)
+          #else
+            lcd_clear();
+            display_scroll_reset();
+          #endif
         }
       #endif //FEATURE_DIT_HOLD_RESET
     #endif
