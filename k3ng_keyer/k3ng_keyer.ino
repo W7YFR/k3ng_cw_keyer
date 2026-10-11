@@ -1959,11 +1959,11 @@ byte pot_wpm_low_value;
     byte cli_paddle_echo = cli_paddle_echo_on_at_boot;
     byte cli_prosign_flag = 0;
     byte cli_wait_for_cr_to_send_cw = 0;
-    #if defined(FEATURE_STRAIGHT_KEY_ECHO)
-      byte cli_straight_key_echo = cli_straight_key_echo_on_at_boot;
-    #endif
   #endif //FEATURE_COMMAND_LINE_INTERFACE
 #endif //FEATURE_SERIAL
+#if defined(FEATURE_STRAIGHT_KEY_ECHO)
+  byte cli_straight_key_echo = cli_straight_key_echo_on_at_boot;  // also echoes to the display, with or without the CLI
+#endif
 
 byte send_buffer_array[send_buffer_size];
 byte send_buffer_bytes = 0;
