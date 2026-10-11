@@ -52,6 +52,12 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   fit is dropped), and nothing is printed while the port is in Winkey mode.
 
 ### Fixed
+- `feature/vband-link`: command mode notices the adapter going (its goodbye, or the link timeout) instead of only
+  keeping the link alive, without drawing "VBand Off" over its screens. Received text and join/leave lines go on
+  behind command mode and show on leaving it, so the display has the whole conversation.
+- `feature/settings-menu`: the menu follows the adapter coming and going while it's open. The VBand pages close back
+  to the top level with "Adapter off" as the title, and the top level's VBand row appears and disappears, with the
+  cursor kept on its row.
 - `fix/async-eeprom-write-overrun`: K3NG's background settings write (`service_async_eeprom_write`) wrote one byte
   too many, putting whatever follows the configuration in RAM into the EEPROM byte after it. Upstream `master` has
   the same bug.
