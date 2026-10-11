@@ -25,6 +25,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `feature/settings-menu` | `feature/vband-link` | `FEATURE_SETTINGS_MENU`: settings menu, shortcuts and CLI |
 | `fix/async-eeprom-write-overrun` | `master` | The background settings write no longer writes one byte past the settings |
 | `fix/straight-key-echo-without-cli` | `master` | Straight key echo to the display builds without the CLI |
+| `fix/prosign-sos-and-warnings` | `master` | SOS decodes to its letters; paddle reads always return; compiler warnings |
 | `fix/exclamation-mark` | `master` | `!` sent and decoded as `-.-.--` |
 | `fix/punctuation-decode` | `fix/exclamation-mark` | `;` `$` `'` `"` `_` `)` decode from the paddles |
 | `feature/extra-button` | `master` | `EXTRA_BUTTONS`: buttons beyond the command and memory buttons |
@@ -60,6 +61,12 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   cursor kept on its row.
 - `feature/dit-hold-clear-reset`: in straight mode, the display keeps the running text. A held straight key counted
   as a dit on every loop pass, so each release set off the dit-hold gesture and cleared the display.
+- `fix/prosign-sos-and-warnings`: decoding SOS no longer sends SOS. `convert_prosign()` keyed it and returned
+  nothing, so the echo printed from a garbage pointer; it now returns "SOS", shown in full by the straight key echo
+  and memory playback. `paddle_pin_read()` returned nothing for a pin the direct-read options don't cover; it now
+  falls back to `digitalRead()` (or reads as not pressed with `OPTION_SAVE_MEMORY_NANOKEYER`). The remaining compiler
+  warnings in the boards' builds are fixed (unused variables, signed/unsigned comparisons, including the button
+  library's). Upstream `master` has all of these.
 - `fix/async-eeprom-write-overrun`: K3NG's background settings write (`service_async_eeprom_write`) wrote one byte
   too many, putting whatever follows the configuration in RAM into the EEPROM byte after it. Upstream `master` has
   the same bug.
