@@ -4953,7 +4953,7 @@ void settings_keyer_set(byte item, int value) {
         switch_to_tx_silent(txs[value]);
         break;
     }
-    config_dirty = 1;
+    settings_save_soon();
     return;
   }
 
@@ -4981,7 +4981,20 @@ void settings_keyer_set(byte item, int value) {
   if (!strcmp(s.key, "LEAD")) {configuration.ptt_lead_time[configuration.current_tx - 1] = value;}
   if (!strcmp(s.key, "TAIL")) {configuration.ptt_tail_time[configuration.current_tx - 1] = value;}
   if (!strcmp(s.key, "HZ")) {configuration.hz_sidetone = value;}
+  settings_save_soon();
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void settings_save_soon() {
+
+  // K3NG writes a changed configuration to EEPROM only once eeprom_write_time_ms (30 s) has passed since its last
+  // write, so a setting changed shortly before power-off was lost. One changed on purpose, from the menu or the CLI,
+  // is written as soon as the keyer is idle instead (only the bytes that changed are written).
+
   config_dirty = 1;
+  last_config_write = millis() - eeprom_write_time_ms - 1;
 
 }
 
@@ -5915,7 +5928,9 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
 #if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
   // Settings K3NG's configuration has no field for are kept in the bytes between it and the memories
   // (memory_area_start leaves four), so adding one doesn't move the memories. 0xFF (never written) means defaults.
-  #define SETTINGS_EXTRAS_ADDRESS (sizeof(configuration) + 1)
+  // Not the first of those bytes: K3NG's background configuration write also wrote that one, with whatever follows
+  // the configuration in RAM (fixed on fix/async-eeprom-write-overrun).
+  #define SETTINGS_EXTRAS_ADDRESS (sizeof(configuration) + 2)
   #define SETTINGS_EXTRA_NO_PADDLE_ECHO 0x01
 #endif
 
