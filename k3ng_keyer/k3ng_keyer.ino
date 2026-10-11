@@ -4047,7 +4047,13 @@ void display_scroll_print_char(char charin){
   }
   #endif //OPTION_DISPLAY_NON_ENGLISH_EXTENSIONS
 
-  if (lcd_status != LCD_SCROLL_MSG) {
+  #ifdef FEATURE_VBAND_LINK
+    byte behind_command_mode = vband_link_text_behind_screen && (keyer_machine_mode != KEYER_NORMAL);   // only into the buffer: it shows on leaving command mode
+  #else
+    const byte behind_command_mode = 0;
+  #endif
+
+  if ((lcd_status != LCD_SCROLL_MSG) && (!behind_command_mode)) {
     #ifdef FEATURE_VBAND_LINK
       if (vband_link_text_behind_screen && ((lcd_status == LCD_TIMED_MESSAGE) || (lcd_status == LCD_REVERT))) {
         lcd_previous_status = LCD_SCROLL_MSG;    // the conversation shows once the status screen times out
@@ -4108,7 +4114,7 @@ void display_scroll_print_char(char charin){
   column_pointer++;
 
 
-  display_request_paint();
+  if (!behind_command_mode) {display_request_paint();}
 }
 
 #endif //FEATURE_DISPLAY
@@ -4279,7 +4285,7 @@ void vband_link_set_up(byte up) {
     vband_link_send_heartbeat();                   // answer right away instead of waiting a heartbeat
   } else {
     #ifdef FEATURE_DISPLAY
-      if (vband_link_ready) {                      // the adapter can't announce its own disappearance
+      if (vband_link_ready && (keyer_machine_mode == KEYER_NORMAL)) {   // the adapter can't announce its own disappearance (command mode has its own screens)
         if (lcd_status == LCD_TIMED_MESSAGE) {
           lcd_status = lcd_previous_status;        // a fresh screen, not on top of the adapter's last one
         }
@@ -4315,14 +4321,23 @@ void vband_link_handle_frame() {
     vband_link_print_log(fields, vband_link_rx_frame[2] == 0);
   }
 
-  if (keyer_machine_mode != KEYER_NORMAL) {        // command mode etc.: just keep the link alive, see service_vband_link()
-    if (strcmp(vband_link_rx_frame, "BYE") != 0) {
-      vband_link_last_frame_time = millis();
-      vband_link_set_up(1);
+  if (keyer_machine_mode != KEYER_NORMAL) {        // command mode etc.: keep the link alive, see service_vband_link()
+    if (strcmp(vband_link_rx_frame, "BYE") == 0) { // planned power off or reboot: gone now, not after the timeout
+      vband_link_set_up(0);
+      return;
     }
+    vband_link_last_frame_time = millis();
+    vband_link_set_up(1);
     if (strcmp(vband_link_rx_frame, "CR") == 0) {  // "CR,1" / "CR,0": the command we asked about is known or not
       vband_link_command_reply = fields[0];
     }
+    #ifdef FEATURE_DISPLAY
+      if (strcmp(vband_link_rx_frame, "RX") == 0) {   // the conversation goes on behind command mode, and shows on leaving it
+        vband_link_show_received(fields);
+      } else if (strcmp(vband_link_rx_frame, "SYS") == 0) {
+        vband_link_show_system(fields);
+      }
+    #endif
     return;
   }
 
@@ -4581,8 +4596,9 @@ void vband_link_send_pending_command() {
 void service_vband_link() {
 
   // Called from loop(), and from service_display() while outside KEYER_NORMAL (command mode and the like),
-  // so the adapter keeps hearing our heartbeat there. Outside KEYER_NORMAL the link is only kept alive:
-  // status screens, VBand on/off, tx switching and the timeout all wait until we're back, since they'd
+  // so the adapter keeps hearing our heartbeat there. Outside KEYER_NORMAL the link is kept alive and still
+  // notices the adapter going (its BYE, or the timeout), and received text goes into the display's buffer
+  // to show on leaving; status screens, VBand on/off and tx switching wait until we're back, since they'd
   // draw over command mode's display or change tx lines under it. The adapter repeats "VB" with every
   // heartbeat, so we catch up within one heartbeat of returning.
 
@@ -4621,7 +4637,7 @@ void service_vband_link() {
   }
 
   if (vband_link_up) {
-    if ((keyer_machine_mode == KEYER_NORMAL) && ((millis() - vband_link_last_frame_time) > VBAND_LINK_TIMEOUT_MS)) {
+    if ((millis() - vband_link_last_frame_time) > VBAND_LINK_TIMEOUT_MS) {
       vband_link_set_up(0);
     } else if ((millis() - vband_link_last_heartbeat_time) >= VBAND_LINK_HEARTBEAT_MS) {
       vband_link_send_heartbeat();
