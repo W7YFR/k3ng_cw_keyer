@@ -6594,7 +6594,7 @@ void service_async_eeprom_write(){
         EEPROM.update(ee++, *p++);
       #endif
 
-      if (i < sizeof(configuration)){
+      if (i < (sizeof(configuration) - 1)){  // i is the byte just written: stop after the last one, not one past it
         #if defined(DEBUG_ASYNC_EEPROM_WRITE)
           debug_serial_port->print(F("service_async_eeprom_write: write: "));
           debug_serial_port->println(i);
