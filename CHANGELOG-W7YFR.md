@@ -46,6 +46,11 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 
 ## Unreleased
 
+### Added
+- `feature/vband-link`: the adapter's log on the keyer's USB port. With the adapter's `vb.log` on, each line it sends
+  (`LG` / `LGP` frames) is printed with an `ESP> ` prefix, in any mode. Never waits on the port (a line that doesn't
+  fit is dropped), and nothing is printed while the port is in Winkey mode.
+
 ### Fixed
 - `fix/async-eeprom-write-overrun`: K3NG's background settings write (`service_async_eeprom_write`) wrote one byte
   too many, putting whatever follows the configuration in RAM into the EEPROM byte after it. Upstream `master` has
