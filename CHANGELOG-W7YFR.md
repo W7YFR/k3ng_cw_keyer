@@ -58,6 +58,8 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/settings-menu`: the menu follows the adapter coming and going while it's open. The VBand pages close back
   to the top level with "Adapter off" as the title, and the top level's VBand row appears and disappears, with the
   cursor kept on its row.
+- `feature/dit-hold-clear-reset`: in straight mode, the display keeps the running text. A held straight key counted
+  as a dit on every loop pass, so each release set off the dit-hold gesture and cleared the display.
 - `fix/async-eeprom-write-overrun`: K3NG's background settings write (`service_async_eeprom_write`) wrote one byte
   too many, putting whatever follows the configuration in RAM into the EEPROM byte after it. Upstream `master` has
   the same bug.
