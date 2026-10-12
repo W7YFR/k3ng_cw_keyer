@@ -62,6 +62,10 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   opens Speed (Character, Farnsworth, Cmd speed, Speed pot) above Mode, Weight and the rest; Transmit has the
   transmitter, PTT lead and tail and memory repeat. A row that opens a list shows `>`. The keyed and typed names
   don't change (`/KY WPM`, `ky.wpm`); the WPM setting is labelled "Character".
+- `feature/settings-menu`: VBand's Commands and Settings show their most-used rows (Connect or Disconnect, Who's
+  here) above the lists Rooms, Sound, Display and Device, which hold the rest; a list shows only when it has
+  something in it, and back returns to your row at every depth. Link protocol 2 (the adapter's `SI` items carry the
+  list they go in): update the adapter with it.
 - Only on `w7yfr` (`d55352e`): holding the dit paddle for 10 dits opens the settings menu (command mode with the menu
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
