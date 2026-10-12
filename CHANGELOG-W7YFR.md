@@ -40,6 +40,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `fix/echo-practice` | `master` | `%` sent and tracked in echo practice |
 | `feature/straight-key-paddle` | `master` | `FEATURE_STRAIGHT_KEY_PADDLE`: the dit paddle as a straight key |
 | `feature/farnsworth-potentiometer` | `master` | `FEATURE_FARNSWORTH_POTENTIOMETER`: a pot for the Farnsworth speed |
+| `feature/farnsworth-effective-speed` | `feature/farnsworth-potentiometer` | `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED`: the speed is the character speed, Farnsworth the effective speed |
 | `fix/prosign-forward-declaration` | `master` | Builds outside the Arduino IDE (`convert_prosign`) |
 | `fix/platformio-forward-declarations` | `fix/prosign-forward-declaration` | More functions declared ahead, so other boards' profiles build outside the Arduino IDE |
 | `build/platformio` | `master` | PlatformIO builds |
@@ -56,6 +57,14 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/settings-menu`: each list starts with "< Back" ("< Exit" on the top level, which leaves the menu and
   command mode) and opens on its second row, with the first scrolled off the top when the rest fills the screen; a
   dah scrolls it into view.
+- `feature/farnsworth-effective-speed`: `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED` turns Farnsworth the other way round.
+  The speed is the character speed, which the paddles always send at, and the Farnsworth setting (menu, `\M`, or
+  its pot) a slower effective speed that memories and buffered sending stretch their spacing to; it's off at 0 or at
+  or above the speed. Without the option, K3NG's way is unchanged (`farnsworth_speeds()` gives its answer). The CLI,
+  help, web page and pot message name the speeds to match, and the pot shows "Farnsworth off" when it has no effect.
+  The option is listed, off, in every `keyer_features_and_options` file. Known gap: Winkey hosts aren't translated
+  yet, so with the option a host's Farnsworth setting reads the other way (see the roadmap). Only on `w7yfr`
+  (`168aca8`): enabled.
 - `feature/build-revision`: a build given `-D FIRMWARE_GIT_REV=<commit>` shows it on the startup screen in place of
   `CODE_VERSION` ("V: 4f3f238", with `+` for uncommitted changes) and after `CODE_VERSION` in the serial boot
   message; without it nothing changes. Only on `w7yfr` (`a4f836c`): `platformio.ini` passes it from
