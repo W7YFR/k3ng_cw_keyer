@@ -1957,6 +1957,8 @@ uint16_t memory_area_end = 0;
   char vband_link_command_reply = 0;                // the adapter's "CR" answer to "CK": '1' known command, '0' not
 #endif //FEATURE_VBAND_LINK
 
+#define SETTINGS_ANSWER_MS 3000                     // how long an answer or notice in the menu or a "/" shortcut shows
+
 // Settings types are defined whatever the features, since the build's generated function prototypes mention them
 // even for functions a feature leaves out.
 struct settings_keyer_item {                        // one of the keyer's own settings (settings_keyer_items, in PROGMEM)
@@ -4562,7 +4564,7 @@ byte command_vband_link() {
 
   if (!vband_link_up) {
     #ifdef FEATURE_DISPLAY
-      lcd_center_print_timed("No VBand", 0, default_display_msg_delay);
+      lcd_center_print_timed("No VBand", 0, SETTINGS_ANSWER_MS);
     #endif
     send_char('?',KEYER_NORMAL);
     return 0;
@@ -4612,7 +4614,7 @@ byte command_vband_link_run(const char *word) {
 
   if (!vband_link_up) {
     #ifdef FEATURE_DISPLAY
-      lcd_center_print_timed("No VBand", 0, default_display_msg_delay);
+      lcd_center_print_timed("No VBand", 0, SETTINGS_ANSWER_MS);
     #endif
     send_char('?',KEYER_NORMAL);
     return 0;
@@ -4632,8 +4634,8 @@ byte command_vband_link_run(const char *word) {
     return 1;
   }
   #ifdef FEATURE_DISPLAY
-    lcd_center_print_timed(vband_link_command_reply ? (String("Unknown /") + word) : String("VBand no answer"), 0, default_display_msg_delay);
-    lcd_center_print_timed(vband_link_command_reply ? "/H for list" : "Try again", 1, default_display_msg_delay);
+    lcd_center_print_timed(vband_link_command_reply ? (String("Unknown /") + word) : String("VBand no answer"), 0, SETTINGS_ANSWER_MS);
+    lcd_center_print_timed(vband_link_command_reply ? "/H for list" : "Try again", 1, SETTINGS_ANSWER_MS);
   #endif
   send_char('?',KEYER_NORMAL);
   return 0;
@@ -4717,8 +4719,8 @@ void service_vband_link() {
 
 // Settings, reached three ways, all by the same names (group.key):
 //   command mode "/" then a pause    - a menu on the display: dit (E) down, dah (T) up, R open / toggle / run / save,
-//                                      B or "< Back" back a level (B on the top level leaves command mode), X or the
-//                                      command button leave command mode
+//                                      B or "< Back" back a level (B on the top level closes the menu), "< Exit", X or
+//                                      the command button leave command mode
 //   command mode "/" then words      - "/KY WPM 22" sets, "/KY WPM" shows, "/KY" + pause opens that group's menu,
 //                                      and with FEATURE_VBAND_LINK any other word is an adapter command ("/WHO")
 //   CLI "\$ [group[.key [value]]]"    - lists, shows or sets
@@ -5562,7 +5564,7 @@ byte settings_menu_save(char group, settings_menu_row &row, int value) {
   #ifdef FEATURE_VBAND_LINK
     if (group == 'v') {
       if (!settings_adapter_set(settings_adapter_items[row.item].key, value)) {
-        lcd_center_print_timed("VBand no answer", 0, default_display_msg_delay);
+        lcd_center_print_timed("VBand no answer", 0, SETTINGS_ANSWER_MS);
         send_char('?', KEYER_NORMAL);
         return 0;
       }
@@ -5597,7 +5599,8 @@ byte settings_menu_top(char group, byte cursor) {
 
 byte settings_menu(char group) {
 
-  // Returns 1 to leave command mode (X, the command button, or B on the top level), 0 to stay. An adapter command
+  // Returns 1 to leave command mode ("< Exit", X or the command button), 0 to stay (B on the top level closes the
+  // menu). An adapter command
   // run from here shows its answer, then the menu comes back where it was.
 
   byte cursor = 1;                                 // row 0 is Exit / "< Back"
@@ -5615,7 +5618,7 @@ byte settings_menu(char group) {
 
   #ifdef FEATURE_VBAND_LINK
     if ((group == 'V') && (!vband_link_up)) {
-      lcd_center_print_timed("No VBand", 0, default_display_msg_delay);
+      lcd_center_print_timed("No VBand", 0, SETTINGS_ANSWER_MS);
       send_char('?', KEYER_NORMAL);
       return 0;
     }
@@ -5681,7 +5684,7 @@ byte settings_menu(char group) {
           #ifdef FEATURE_VBAND_LINK
             if (((row.target == 'V') && (!vband_link_up)) ||
                 (((row.target == 'v') || (row.target == 'c')) && (!settings_adapter_fetch((row.target == 'c') ? 'a' : 's')))) {
-              lcd_center_print_timed("VBand no answer", 0, default_display_msg_delay);
+              lcd_center_print_timed("VBand no answer", 0, SETTINGS_ANSWER_MS);
               send_char('?', KEYER_NORMAL);
               break;
             }
@@ -5701,7 +5704,7 @@ byte settings_menu(char group) {
               return 1;
             }
             if ((length > 0) && (!settings_adapter_set_text(settings_adapter_items[row.item].key, text))) {
-              lcd_center_print_timed("VBand no answer", 0, default_display_msg_delay);
+              lcd_center_print_timed("VBand no answer", 0, SETTINGS_ANSWER_MS);
               send_char('?', KEYER_NORMAL);
             }
           #endif
@@ -5717,7 +5720,7 @@ byte settings_menu(char group) {
           edit_value = row.value;
         }
         break;
-      case 2111:                                   // B - back a level, or cancel a change; on the top level, leave command mode
+      case 2111:                                   // B - back a level, or cancel a change; on the top level, close the menu
         if (editing) {
           editing = 0;
         } else if (group) {
@@ -5726,7 +5729,7 @@ byte settings_menu(char group) {
           top = settings_menu_top(group, cursor);
         } else {
           settings_menu_close();
-          return 1;
+          return 0;
         }
         break;
       case 2112:                                   // X, or the command button - leave command mode (a change in progress is dropped)
@@ -5783,6 +5786,7 @@ byte settings_command_words() {
   String text;
   String shown = "/";
   unsigned int word_space_ms = (1200 / configuration.wpm) * 7;
+  unsigned int pause_ms = word_space_ms * 3;       // after "/KY" or "/KY WPM", this long with nothing keyed: done
 
   #ifdef FEATURE_DISPLAY
     lcd_center_print_timed(shown, 0, 10000);
@@ -5811,7 +5815,7 @@ byte settings_command_words() {
       return 0;
     #else
       #ifdef FEATURE_DISPLAY
-        lcd_center_print_timed(String("Unknown /") + words[0], 0, default_display_msg_delay);
+        lcd_center_print_timed(String("Unknown /") + words[0], 0, SETTINGS_ANSWER_MS);
       #endif
       send_char('?', KEYER_NORMAL);
       return 0;
@@ -5819,7 +5823,7 @@ byte settings_command_words() {
   }
 
   shown = shown + words[0] + " ";
-  length = settings_read_word(words[1], 5000, shown);
+  length = settings_read_word(words[1], pause_ms, shown);
   if (length == 0) {                               // "/KY" then a pause: that group's menu
     #ifdef FEATURE_DISPLAY
       return settings_menu(group);
@@ -5830,17 +5834,17 @@ byte settings_command_words() {
   if (length < 0) {return (length == -2);}
 
   shown = shown + words[1] + " ";
-  length = settings_read_word(words[2], 5000, shown);
+  length = settings_read_word(words[2], pause_ms, shown);
   if (length < 0) {return (length == -2);}
 
   if (settings_apply(group, words[1], length ? words[2] : NULL, text)) {
     #ifdef FEATURE_DISPLAY
-      lcd_center_print_timed(text, 0, default_display_msg_delay);
+      lcd_center_print_timed(text, 0, SETTINGS_ANSWER_MS);
     #endif
     send_char(command_mode_acknowledgement_character, KEYER_NORMAL);
   } else {
     #ifdef FEATURE_DISPLAY
-      lcd_center_print_timed(text, 0, default_display_msg_delay);
+      lcd_center_print_timed(text, 0, SETTINGS_ANSWER_MS);
     #endif
     send_char('?', KEYER_NORMAL);
   }
@@ -5852,8 +5856,8 @@ byte settings_command_words() {
 
 byte settings_command(byte *keyer_mode_before) {
 
-  // Command mode "/": the menu or a keyed shortcut. Returns 1 to leave command mode (X, the command button, or B
-  // on the menu's top level); commands and settings changes keep it in command mode. Command mode keeps the
+  // Command mode "/": the menu or a keyed shortcut. Returns 1 to leave command mode ("< Exit", X or the command
+  // button); commands and settings changes keep it in command mode. Command mode keeps the
   // keyer in an iambic mode while it reads the paddles and restores *keyer_mode_before on exit, so the keyer mode
   // setting reads and changes that.
 
