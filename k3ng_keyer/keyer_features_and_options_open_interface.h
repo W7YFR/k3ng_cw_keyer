@@ -25,6 +25,7 @@
 //#define FEATURE_DIT_HOLD_RESET         // hold the dit paddle for dit_hold_reset_count consecutive dits, then release it - clears the display during normal operation, or restarts the in-progress recording if inside program_memory() - see dit_hold_reset_count in keyer_settings.h
 //#define FEATURE_AUTOSPACE
 #define FEATURE_FARNSWORTH
+// #define OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED  // the speed (WPM) is the character speed, as the paddles send, and the Farnsworth setting (and pot) a slower effective speed for memories and buffered sending; without it, K3NG's way: the speed is the effective speed and the Farnsworth setting a faster character speed. Requires FEATURE_FARNSWORTH. Not yet translated for Winkey hosts, whose speed and Farnsworth commands still mean K3NG's way
 //#define FEATURE_DL2SBA_BANKSWITCH       // Switch memory banks feature as described here: http://dl2sba.com/index.php?option=com_content&view=article&id=131:nanokeyer&catid=15:shack&Itemid=27#english
 #define FEATURE_LCD_4BIT                // classic LCD disidefplay using 4 I/O lines
 //#define FEATURE_LCD_ADAFRUIT_I2C          // Adafruit I2C LCD display using MCP23017 at addr 0x20

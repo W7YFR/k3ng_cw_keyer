@@ -18,6 +18,7 @@
 //#define FEATURE_DIT_HOLD_RESET         // hold the dit paddle for dit_hold_reset_count consecutive dits, then release it - clears the display during normal operation, or restarts the in-progress recording if inside program_memory() - see dit_hold_reset_count in keyer_settings.h
 #define FEATURE_AUTOSPACE
 //#define FEATURE_FARNSWORTH
+//#define OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED  // the speed (WPM) is the character speed, as the paddles send, and the Farnsworth setting (and pot) a slower effective speed for memories and buffered sending; without it, K3NG's way: the speed is the effective speed and the Farnsworth setting a faster character speed. Requires FEATURE_FARNSWORTH. Not yet translated for Winkey hosts, whose speed and Farnsworth commands still mean K3NG's way
 //#define FEATURE_DL2SBA_BANKSWITCH       // Switch memory banks feature as described here: http://dl2sba.com/index.php?option=com_content&view=article&id=131:nanokeyer&catid=15:shack&Itemid=27#english
 //#define FEATURE_SLEEP                   // go to sleep after x minutes to conserve battery power
 //#define FEATURE_LCD_BACKLIGHT_AUTO_DIM  // turn off LCD backlight and/or dim Power Indicator LED after x minutes (LED requires a PWM pin)

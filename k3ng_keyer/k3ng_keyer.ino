@@ -1653,6 +1653,10 @@ void sidetone_adj(int hz);
   #error "FEATURE_FARNSWORTH_POTENTIOMETER requires FEATURE_POTENTIOMETER"
 #endif
 
+#if defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED) && !defined(FEATURE_FARNSWORTH)
+  #error "OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED requires FEATURE_FARNSWORTH"
+#endif
+
 #if defined(FEATURE_DUAL_MODE_KEYER_AND_TINYFSK)
   #include "TinyFSK.h"
   uint8_t runTinyFSK = 0;
@@ -8125,7 +8129,10 @@ void check_potentiometer()
         config_dirty = 1;
         last_pot_farnsworth_read = pot_value_farnsworth_read;
         #ifdef FEATURE_DISPLAY
-          if (LCD_COLUMNS < 9){
+          unsigned int character_wpm, effective_wpm;
+          if (!farnsworth_speeds(&character_wpm, &effective_wpm)) {
+            lcd_center_print_timed((LCD_COLUMNS < 9) ? "Frns off" : "Farnsworth off", 0, default_display_msg_delay);
+          } else if (LCD_COLUMNS < 9){
             lcd_center_print_timed("Frns " + String(configuration.wpm_farnsworth), 0, default_display_msg_delay);
           } else {
             lcd_center_print_timed("Farnsworth " + String(configuration.wpm_farnsworth) + " wpm", 0, default_display_msg_delay);
@@ -8145,10 +8152,10 @@ void check_potentiometer()
 #endif
 //-------------------------------------------------------------------------------------------------------
 #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
-// Returns the Farnsworth *character* speed in WPM set by the dedicated pot.
-// Full CCW maps to farnsworth_pot_low_value (0 by default), which disables
-// Farnsworth since send_dit()/send_dah() only apply it when
-// configuration.wpm_farnsworth > configuration.wpm.
+// Returns the Farnsworth speed in WPM set by the dedicated pot: the character
+// speed, or the effective speed with OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED.
+// Full CCW maps to farnsworth_pot_low_value (0 by default), which turns
+// Farnsworth off (see farnsworth_speeds()).
 byte pot_value_farnsworth()
 {
 
@@ -9286,6 +9293,49 @@ void check_dah_paddle()
 
 //-------------------------------------------------------------------------------------------------------
 
+#ifdef FEATURE_FARNSWORTH
+byte farnsworth_speeds(unsigned int *character_wpm, unsigned int *effective_wpm) {
+
+  // Farnsworth timing for sending from memory or the buffer: characters at *character_wpm, spaced out to an overall
+  // *effective_wpm. Returns 0, leaving both alone, when it's off. K3NG's way, the speed is the effective speed and
+  // the Farnsworth setting a faster character speed. With OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED the speed is the
+  // character speed, as the paddles send, and the Farnsworth setting a slower effective speed. Either way, it's off
+  // at 0 or on the wrong side of the speed.
+  // Winkey hosts aren't translated yet: their speed and Farnsworth commands set these in K3NG's sense (the Winkey
+  // Farnsworth speed is a character speed), so with the option a host's Farnsworth setting reads the other way.
+
+  #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+    if ((configuration.wpm_farnsworth == 0) || (configuration.wpm_farnsworth >= configuration.wpm)) {return 0;}
+    *character_wpm = configuration.wpm;
+    *effective_wpm = configuration.wpm_farnsworth;
+  #else
+    if (configuration.wpm_farnsworth <= configuration.wpm) {return 0;}
+    *character_wpm = configuration.wpm_farnsworth;
+    *effective_wpm = configuration.wpm;
+  #endif
+  return 1;
+
+}
+#endif //FEATURE_FARNSWORTH
+
+//-------------------------------------------------------------------------------------------------------
+
+unsigned int send_char_spacing_wpm() {
+
+  // the speed send_char() times the spaces between characters and words at: the effective speed
+
+  unsigned int effective_wpm = configuration.wpm;
+
+  #ifdef FEATURE_FARNSWORTH
+    unsigned int character_wpm;
+    farnsworth_speeds(&character_wpm, &effective_wpm);
+  #endif
+  return effective_wpm;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 void send_dit(){
 
   // notes: key_compensation is a straight x mS lengthening or shortening of the key down time
@@ -9295,8 +9345,8 @@ void send_dit(){
 
 
   #ifdef FEATURE_FARNSWORTH
-    if ((sending_mode == AUTOMATIC_SENDING) && (configuration.wpm_farnsworth > configuration.wpm)) {
-      character_wpm = configuration.wpm_farnsworth;
+    unsigned int effective_wpm;
+    if ((sending_mode == AUTOMATIC_SENDING) && farnsworth_speeds(&character_wpm, &effective_wpm)) {
       #if defined(DEBUG_FARNSWORTH)
         debug_serial_port->println(F("send_dit: farns act"));
       #endif
@@ -9397,8 +9447,9 @@ void send_dah(){
   unsigned int character_wpm  = configuration.wpm;
 
   #ifdef FEATURE_FARNSWORTH
-    if ((sending_mode == AUTOMATIC_SENDING) && (configuration.wpm_farnsworth > configuration.wpm)) {
-      character_wpm = configuration.wpm_farnsworth;
+    unsigned int effective_wpm;
+    if (sending_mode == AUTOMATIC_SENDING) {
+      farnsworth_speeds(&character_wpm, &effective_wpm);
     }
   #endif //FEATURE_FARNSWORTH
 
@@ -12463,7 +12514,7 @@ void send_char(byte cw_char, byte omit_letterspace)
 
 
       case ' ':
-        loop_element_lengths((configuration.length_wordspace-length_letterspace-2),0,configuration.wpm);
+        loop_element_lengths((configuration.length_wordspace-length_letterspace-2),0,send_char_spacing_wpm());
         break;
 
       #ifdef OPTION_RUSSIAN_LANGUAGE_SEND_CLI    // Contributed by Павел Бирюков, UA1AQC
@@ -12557,7 +12608,7 @@ void send_char(byte cw_char, byte omit_letterspace)
 
       case '|':
         #if !defined(OPTION_WINKEY_DO_NOT_SEND_7C_BYTE_HALF_SPACE)
-          loop_element_lengths(0.5,0,configuration.wpm);
+          loop_element_lengths(0.5,0,send_char_spacing_wpm());
         #endif
         return;
         break;
@@ -12575,14 +12626,15 @@ void send_char(byte cw_char, byte omit_letterspace)
     }
     if (omit_letterspace != OMIT_LETTERSPACE) {
 
-      loop_element_lengths((length_letterspace-1),0,configuration.wpm); //this is minus one because send_dit and send_dah have a trailing element space
+      loop_element_lengths((length_letterspace-1),0,send_char_spacing_wpm()); //this is minus one because send_dit and send_dah have a trailing element space
 
     }
 
     #ifdef FEATURE_FARNSWORTH
     // Farnsworth Timing : http://www.arrl.org/files/file/Technology/x9004008.pdf
-     if (configuration.wpm_farnsworth > configuration.wpm){
-       float additional_intercharacter_time_ms = ((( (1.0 * farnsworth_timing_calibration) * ((60.0 * float(configuration.wpm_farnsworth) ) - (37.2 * float(configuration.wpm) ))/( float(configuration.wpm) * float(configuration.wpm_farnsworth) ))/19.0)*1000.0) - (1200.0/ float(configuration.wpm_farnsworth) );
+     unsigned int character_wpm, effective_wpm;
+     if (farnsworth_speeds(&character_wpm, &effective_wpm)){
+       float additional_intercharacter_time_ms = ((( (1.0 * farnsworth_timing_calibration) * ((60.0 * float(character_wpm) ) - (37.2 * float(effective_wpm) ))/( float(effective_wpm) * float(character_wpm) ))/19.0)*1000.0) - (1200.0/ float(character_wpm) );
        loop_element_lengths(1,additional_intercharacter_time_ms,0);}
     #endif
 
@@ -15462,7 +15514,11 @@ void print_serial_help(PRIMARY_SERIAL_CLS * port_to_use,byte paged_help){
   #endif
   port_to_use->println(F("\\L##\t\t: Set weighting (50 = normal)"));
   #ifdef FEATURE_FARNSWORTH
-    port_to_use->println(F("\\M###\t\t: Set Farnsworth character speed (must exceed \\W speed; 0 = disabled)")); //Upper case to first letter only(WD9DMP)
+    #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+      port_to_use->println(F("\\M###\t\t: Set Farnsworth effective speed (below \\W speed; 0 = disabled)"));
+    #else
+      port_to_use->println(F("\\M###\t\t: Set Farnsworth character speed (must exceed \\W speed; 0 = disabled)")); //Upper case to first letter only(WD9DMP)
+    #endif
   #endif
   if (paged_help) {serial_page_pause(port_to_use,10);}
   port_to_use->println(F("\\N\t\t: Toggle paddle reverse")); //Upper case to first letter only(WD9DMP)
@@ -17169,7 +17225,11 @@ void serial_set_farnsworth(PRIMARY_SERIAL_CLS * port_to_use) {
   int set_farnsworth_wpm = serial_get_number_input(3,-1,1000, port_to_use, RAISE_ERROR_MSG);
   if ((set_farnsworth_wpm > 0) || (set_farnsworth_wpm == 0)) {
     configuration.wpm_farnsworth = set_farnsworth_wpm;
-    port_to_use->write("\r\nSetting Farnsworth character WPM to ");
+    #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+      port_to_use->write("\r\nSetting Farnsworth effective WPM to ");
+    #else
+      port_to_use->write("\r\nSetting Farnsworth character WPM to ");
+    #endif
     port_to_use->println(set_farnsworth_wpm,DEC);
     config_dirty = 1;
   }
@@ -18867,7 +18927,9 @@ void serial_status(PRIMARY_SERIAL_CLS * port_to_use) {
     port_to_use->println(F("n"));
   }
   if (speed_mode == SPEED_NORMAL) {
-    #ifdef FEATURE_FARNSWORTH
+    #if defined(FEATURE_FARNSWORTH) && defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+      port_to_use->print(F("Character WPM: "));
+    #elif defined(FEATURE_FARNSWORTH)
       port_to_use->print(F("Effective WPM: "));
     #else
       port_to_use->print(F("WPM: "));
@@ -18876,8 +18938,13 @@ void serial_status(PRIMARY_SERIAL_CLS * port_to_use) {
     port_to_use->print(F("Command Mode WPM: "));
     port_to_use->println(configuration.wpm_command_mode,DEC);
     #ifdef FEATURE_FARNSWORTH
-      port_to_use->print(F("Character WPM (Farnsworth): "));
-      if (configuration.wpm_farnsworth < configuration.wpm) {
+      unsigned int character_wpm, effective_wpm;
+      #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+        port_to_use->print(F("Effective WPM (Farnsworth): "));
+      #else
+        port_to_use->print(F("Character WPM (Farnsworth): "));
+      #endif
+      if (!farnsworth_speeds(&character_wpm, &effective_wpm)) {
         port_to_use->println(F("Disabled")); //(WD9DMP)
       } else {
         port_to_use->println(configuration.wpm_farnsworth,DEC);
