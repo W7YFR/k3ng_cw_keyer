@@ -1929,7 +1929,9 @@ uint16_t memory_area_end = 0;
 
 #ifdef FEATURE_DISPLAY
   enum lcd_statuses {LCD_CLEAR, LCD_REVERT, LCD_TIMED_MESSAGE, LCD_SCROLL_MSG};
-  #define default_display_msg_delay 1000
+  #ifndef default_display_msg_delay
+    #define default_display_msg_delay 1000   // ms a timed message (a command mode confirmation, say) shows
+  #endif
   #ifndef display_paint_budget_us
     #define display_paint_budget_us 1000   // max time service_display() spends drawing per call, so redraws never stall paddle handling
   #endif
