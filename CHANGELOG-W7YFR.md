@@ -24,6 +24,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `feature/vband-link` | `feature/oled-font-select` | `FEATURE_VBAND_LINK`: the link to the ESP32 VBand adapter |
 | `feature/settings-menu` | `feature/vband-link` | `FEATURE_SETTINGS_MENU`: settings menu, shortcuts and CLI |
 | `feature/display-msg-delay-setting` | `master` | `default_display_msg_delay` can be set in a settings file |
+| `feature/build-revision` | `master` | `FIRMWARE_GIT_REV`: the startup screen shows the commit a build came from |
 | `fix/async-eeprom-write-overrun` | `master` | The background settings write no longer writes one byte past the settings |
 | `fix/straight-key-echo-without-cli` | `master` | Straight key echo to the display builds without the CLI |
 | `fix/prosign-sos-and-warnings` | `master` | SOS decodes to its letters; paddle reads always return; compiler warnings |
@@ -55,6 +56,10 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/settings-menu`: each list starts with "< Back" ("< Exit" on the top level, which leaves the menu and
   command mode) and opens on its second row, with the first scrolled off the top when the rest fills the screen; a
   dah scrolls it into view.
+- `feature/build-revision`: a build given `-D FIRMWARE_GIT_REV=<commit>` shows it on the startup screen in place of
+  `CODE_VERSION` ("V: 4f3f238", with `+` for uncommitted changes) and after `CODE_VERSION` in the serial boot
+  message; without it nothing changes. Only on `w7yfr` (`a4f836c`): `platformio.ini` passes it from
+  `git describe --always --dirty=+`.
 - `feature/display-msg-delay-setting`: a settings file can set `default_display_msg_delay`, how long a timed
   display message (a command mode confirmation, say) shows; the default stays 1000 ms. Only on `w7yfr` (`3fd2802`):
   set to 3000 ms.
