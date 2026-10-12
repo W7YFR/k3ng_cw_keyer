@@ -2007,7 +2007,8 @@ uint16_t memory_area_end = 0;
 // Settings types are defined whatever the features, since the build's generated function prototypes mention them
 // even for functions a feature leaves out.
 struct settings_keyer_item {                        // one of the keyer's own settings (settings_keyer_items, in PROGMEM)
-  char group;                                       // 'K' keyer, 'S' sidetone
+  char group;                                       // the word it's keyed or typed under: 'K' KY, 'S' ST
+  char menu;                                        // the menu list it's in: 'w' Speed, 'K' Keying, 'S' Sidetone, 'T' Transmit
   char key[6];
   char label[12];
   char type;                                        // 'n' number, 'z' number where 0 is off, 'r' hundredths, 'b' on/off, 'e' one of a list
@@ -4899,39 +4900,40 @@ void service_vband_link() {
   #define SETTINGS_PTT
 #endif
 
-// Only settings for what's built in: each is here only with the feature (or pins) it changes.
+// Only settings for what's built in: each is here only with the feature (or pins) it changes. Each menu list shows
+// its settings in this order, after the lists it opens (settings_menu_children()).
 const settings_keyer_item settings_keyer_items[] PROGMEM = {   // read with settings_keyer_load()
-  {'K', "MODE",  "Mode",        'e', 0, 0, 1, 0},
-  {'K', "WPM",   "Speed",       'n', wpm_limit_low, wpm_limit_high, 1, 'w'},
+  {'K', 'w', "WPM",   "Character",   'n', wpm_limit_low, wpm_limit_high, 1, 'w'},
   #ifdef FEATURE_FARNSWORTH
-    {'K', "FW",    "Farnsworth",  'z', 0, wpm_limit_high, 1, 'w'},
+    {'K', 'w', "FW",    "Farnsworth",  'z', 0, wpm_limit_high, 1, 'w'},
   #endif
-  {'K', "CWPM",  "Cmd speed",   'n', wpm_limit_low, wpm_limit_high, 1, 'w'},
+  {'K', 'w', "CWPM",  "Cmd speed",   'n', wpm_limit_low, wpm_limit_high, 1, 'w'},
   #ifdef FEATURE_POTENTIOMETER
-    {'K', "POT",   "Speed pot",   'b', 0, 1, 1, 0},
+    {'K', 'w', "POT",   "Speed pot",   'b', 0, 1, 1, 0},
   #endif
-  {'K', "WT",    "Weight",      'n', 10, 90, 1, 0},
-  {'K', "RATIO", "Dah ratio",   'r', 160, 800, 10, 0},
-  {'K', "REV",   "Paddle rev",  'b', 0, 1, 1, 0},
-  {'K', "MEM",   "Dit/dah mem", 'b', 0, 1, 1, 0},
-  #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
-    {'K', "ECHO",  "Paddle echo", 'b', 0, 1, 1, 0},
-  #endif
+  {'K', 'K', "MODE",  "Mode",        'e', 0, 0, 1, 0},
+  {'K', 'K', "WT",    "Weight",      'n', 10, 90, 1, 0},
+  {'K', 'K', "RATIO", "Dah ratio",   'r', 160, 800, 10, 0},
+  {'K', 'K', "REV",   "Paddle rev",  'b', 0, 1, 1, 0},
+  {'K', 'K', "MEM",   "Dit/dah mem", 'b', 0, 1, 1, 0},
   #ifdef FEATURE_AUTOSPACE
-    {'K', "ASPC",  "Autospace",   'b', 0, 1, 1, 0},
+    {'K', 'K', "ASPC",  "Autospace",   'b', 0, 1, 1, 0},
   #endif
-  #ifdef FEATURE_MEMORIES
-    {'K', "RPT",   "Mem repeat",  'n', 0, 9900, 100, 'm'},
+  #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
+    {'K', 'K', "ECHO",  "Paddle echo", 'b', 0, 1, 1, 0},
   #endif
   #ifdef SETTINGS_TX_CHOICE
-    {'K', "TX",    "Transmitter", 'e', 0, 0, 1, 0},
+    {'K', 'T', "TX",    "Transmitter", 'e', 0, 0, 1, 0},
   #endif
   #ifdef SETTINGS_PTT
-    {'K', "LEAD",  "PTT lead",    'n', 0, 500, 10, 'm'},
-    {'K', "TAIL",  "PTT tail",    'n', 0, 1000, 10, 'm'},
+    {'K', 'T', "LEAD",  "PTT lead",    'n', 0, 500, 10, 'm'},
+    {'K', 'T', "TAIL",  "PTT tail",    'n', 0, 1000, 10, 'm'},
   #endif
-  {'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
-  {'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
+  #ifdef FEATURE_MEMORIES
+    {'K', 'T', "RPT",   "Mem repeat",  'n', 0, 9900, 100, 'm'},
+  #endif
+  {'S', 'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
+  {'S', 'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
 };
 #define SETTINGS_KEYER_COUNT (sizeof(settings_keyer_items) / sizeof(settings_keyer_items[0]))
 
@@ -4974,6 +4976,14 @@ char settings_keyer_group(byte item) {
 
 //-------------------------------------------------------------------------------------------------------
 
+char settings_keyer_menu(byte item) {
+
+  return pgm_read_byte(&settings_keyer_items[item].menu);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 const char *settings_keyer_unit(char unit) {
 
   switch (unit) {
@@ -5003,8 +5013,10 @@ char settings_group_code(const char *word) {
 const char *settings_group_name(char group) {
 
   switch (group) {
-    case 'K': return "Keyer";
+    case 'K': return "Keying";
+    case 'w': return "Speed";
     case 'S': return "Sidetone";
+    case 'T': return "Transmit";
     case 'V': return "VBand";
     case 'v': return "VBand Settings";
     case 'c': return "VBand Commands";
@@ -5527,29 +5539,61 @@ byte settings_apply(char group, const char *key, const char *value_token, String
 
 //-------------------------------------------------------------------------------------------------------
 
+const char *settings_menu_children(char group) {
+
+  // the lists a menu list opens, in order, above its own rows
+
+  switch (group) {
+    case 0:   return "VKST";                       // VBand, Keying, Sidetone, Transmit
+    case 'K': return "w";                          // Speed
+    case 'V': return "cv";                         // Commands, Settings
+  }
+  return "";
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_menu_child_shown(char child) {
+
+  // VBand while the adapter is there; a keyer list when this build has something in it
+
+  if (child == 'V') {
+    #ifdef FEATURE_VBAND_LINK
+      return vband_link_up;
+    #else
+      return 0;
+    #endif
+  }
+  if ((child == 'v') || (child == 'c')) {return 1;}
+  for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
+    if (settings_keyer_menu(x) == child) {return 1;}
+  }
+  return 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 byte settings_menu_count(char group) {
 
-  byte count = 0;
+  byte count = 1;                                  // Exit / "< Back"
 
-  if (group == 0) {
-    #ifdef FEATURE_VBAND_LINK
-      if (vband_link_up) {count++;}
-    #endif
-    return count + 3;                              // Exit, Keyer, Sidetone
+  for (const char *child = settings_menu_children(group); *child; child++) {
+    if (settings_menu_child_shown(*child)) {count++;}
   }
   #ifdef FEATURE_VBAND_LINK
-    if (group == 'V') {return 3;}                  // Commands, Settings, "< Back"
     if ((group == 'v') || (group == 'c')) {
       for (byte x = 0; x < settings_adapter_count; x++) {
         if ((settings_adapter_items[x].type == 'a') == (group == 'c')) {count++;}
       }
-      return count + 1;
+      return count;
     }
   #endif
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    if (settings_keyer_group(x) == group) {count++;}
+    if (settings_keyer_menu(x) == group) {count++;}
   }
-  return count + 1;
+  return count;
 
 }
 
@@ -5577,29 +5621,22 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
   }
   row--;
 
-  if (group == 0) {
-    const char groups[] = {
-      #ifdef FEATURE_VBAND_LINK
-        'V',
-      #endif
-      'K', 'S'};
-    byte first = 0;
-    #ifdef FEATURE_VBAND_LINK
-      if (!vband_link_up) {first = 1;}             // no adapter, no VBand group
-    #endif
+  for (const char *child = settings_menu_children(group); *child; child++) {   // the lists it opens, first
+    if (!settings_menu_child_shown(*child)) {continue;}
+    if (row--) {continue;}
     out.type = 'g';
-    out.target = groups[first + row];
-    out.label = settings_group_name(out.target);
+    out.target = *child;
+    if (*child == 'v') {                           // under VBand, without repeating it
+      out.label = "Settings";
+    } else if (*child == 'c') {
+      out.label = "Commands";
+    } else {
+      out.label = settings_group_name(*child);
+    }
     return;
   }
 
   #ifdef FEATURE_VBAND_LINK
-    if (group == 'V') {                            // the adapter's settings and its commands, chosen first
-      out.type = 'g';
-      out.target = row ? 'v' : 'c';                // Commands first
-      out.label = row ? "Settings" : "Commands";
-      return;
-    }
     if ((group == 'v') || (group == 'c')) {
       for (byte x = 0; x < settings_adapter_count; x++) {
         settings_adapter_item &s = settings_adapter_items[x];
@@ -5620,7 +5657,7 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
   #endif
 
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    if (settings_keyer_group(x) != group) {continue;}
+    if (settings_keyer_menu(x) != group) {continue;}
     if (row--) {continue;}
     settings_keyer_item s;
     settings_keyer_load(x, s);
@@ -5662,7 +5699,8 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
       line.concat(row.label);
       value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit,
                                   ((group == 'v') || (group == 'c')) ? -1 : row.item);
-      if ((row.type == 'g') || (row.type == 'k') || (row.type == 'x')) {value = "";}
+      if (row.type == 'g') {value = ">";}          // opens a list
+      if ((row.type == 'k') || (row.type == 'x')) {value = "";}
       if ((line.length() + 1 + value.length()) > LCD_COLUMNS) {        // a long name: as much as fits
         value = value.substring(0, (LCD_COLUMNS > (line.length() + 1)) ? (LCD_COLUMNS - line.length() - 1) : 0);
       }
@@ -5745,7 +5783,9 @@ byte settings_menu_save(char group, settings_menu_row &row, int value) {
 
 char settings_menu_parent(char group) {
 
-  return ((group == 'v') || (group == 'c')) ? 'V' : 0;
+  if ((group == 'v') || (group == 'c')) {return 'V';}
+  if (group == 'w') {return 'K';}
+  return 0;
 
 }
 
