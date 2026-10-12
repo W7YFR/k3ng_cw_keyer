@@ -1449,6 +1449,15 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 
 #define CODE_VERSION "2024.03.20.2239"
 
+// A build can name the commit it was built from with -D FIRMWARE_GIT_REV=<commit> (for example from
+// `git describe --always --dirty=+`): the startup screen then shows it in place of CODE_VERSION, and the serial
+// boot message adds it after CODE_VERSION. Without it (an Arduino IDE build), nothing changes.
+#ifdef FIRMWARE_GIT_REV
+  #define CODE_BUILD_STRINGIFY(x) #x
+  #define CODE_BUILD_STRING(x) CODE_BUILD_STRINGIFY(x)
+  #define CODE_BUILD CODE_BUILD_STRING(FIRMWARE_GIT_REV)
+#endif
+
 #define eeprom_magic_number 42               // you can change this number to have the unit re-initialize EEPROM
 
 #include <stdio.h>
@@ -21463,6 +21472,9 @@ void initialize_serial_ports(){
       if (primary_serial_port_mode == SERIAL_CLI) {
         primary_serial_port->print(F("\n\rK3NG Keyer Version "));
         primary_serial_port->write(CODE_VERSION);
+        #ifdef CODE_BUILD
+          primary_serial_port->print(F(" build " CODE_BUILD));
+        #endif
         primary_serial_port->println();
         #if defined(FEATURE_SERIAL_HELP)
           primary_serial_port->println(F("\n\rEnter \\? for help\n"));
@@ -21496,6 +21508,9 @@ void initialize_serial_ports(){
       #if !defined(OPTION_SUPPRESS_SERIAL_BOOT_MSG)
         secondary_serial_port->print(F("\n\rK3NG Keyer Version "));
         secondary_serial_port->write(CODE_VERSION);
+        #ifdef CODE_BUILD
+          secondary_serial_port->print(F(" build " CODE_BUILD));
+        #endif
         secondary_serial_port->println();
         #if defined(FEATURE_SERIAL_HELP)
           secondary_serial_port->println(F("\n\rEnter \\? for help\n"));
@@ -21676,7 +21691,11 @@ void initialize_display(){
         lcd_center_print_timed("hi", 1, 4000);
   #endif
       #endif                                                        // OPTION_PERSONALIZED_STARTUP_SCREEN
-      if (LCD_ROWS > 3) lcd_center_print_timed("V: " + String(CODE_VERSION), 3, 4000);      // display the code version on the fourth line of the display
+      #ifdef CODE_BUILD
+        if (LCD_ROWS > 3) lcd_center_print_timed("V: " CODE_BUILD, 3, 4000);                // the commit it was built from, on the fourth line
+      #else
+        if (LCD_ROWS > 3) lcd_center_print_timed("V: " + String(CODE_VERSION), 3, 4000);      // display the code version on the fourth line of the display
+      #endif
     }
     display_paint(0);                           // show the startup screen now; setup() goes on to block while sounding out HI
   #endif //FEATURE_DISPLAY
