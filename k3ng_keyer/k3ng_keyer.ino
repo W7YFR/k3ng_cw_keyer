@@ -1892,7 +1892,9 @@ uint16_t memory_area_end = 0;
 
 #ifdef FEATURE_DISPLAY
   enum lcd_statuses {LCD_CLEAR, LCD_REVERT, LCD_TIMED_MESSAGE, LCD_SCROLL_MSG};
-  #define default_display_msg_delay 1000
+  #ifndef default_display_msg_delay
+    #define default_display_msg_delay 1000   // ms a timed message (a command mode confirmation, say) shows
+  #endif
 #endif //FEATURE_DISPLAY
 
 #ifdef FEATURE_LCD_ADAFRUIT_I2C
