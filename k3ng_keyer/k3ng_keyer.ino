@@ -1959,15 +1959,15 @@ uint16_t memory_area_end = 0;
 
 // Settings types are defined whatever the features, since the build's generated function prototypes mention them
 // even for functions a feature leaves out.
-struct settings_keyer_item {                        // one of the keyer's own settings (settings_keyer_items)
+struct settings_keyer_item {                        // one of the keyer's own settings (settings_keyer_items, in PROGMEM)
   char group;                                       // 'K' keyer, 'S' sidetone
-  const char *key;
-  const char *label;
+  char key[6];
+  char label[12];
   char type;                                        // 'n' number, 'z' number where 0 is off, 'r' hundredths, 'b' on/off, 'e' one of a list
   int min;
   int max;
   int step;
-  const char *unit;
+  char unit;                                        // 'w' wpm, 'm' ms, 'h' Hz, 0 none (settings_keyer_unit())
 };
 struct settings_menu_row {                          // one row of the menu: a group, "< Back", a setting, an adapter command
   String label;
@@ -4733,38 +4733,38 @@ void service_vband_link() {
 #endif
 
 // Only settings for what's built in: each is here only with the feature (or pins) it changes.
-const settings_keyer_item settings_keyer_items[] = {
-  {'K', "MODE",  "Mode",        'e', 0, 0, 1, ""},
-  {'K', "WPM",   "Speed",       'n', wpm_limit_low, wpm_limit_high, 1, "wpm"},
+const settings_keyer_item settings_keyer_items[] PROGMEM = {   // read with settings_keyer_load()
+  {'K', "MODE",  "Mode",        'e', 0, 0, 1, 0},
+  {'K', "WPM",   "Speed",       'n', wpm_limit_low, wpm_limit_high, 1, 'w'},
   #ifdef FEATURE_FARNSWORTH
-    {'K', "FW",    "Farnsworth",  'z', 0, wpm_limit_high, 1, "wpm"},
+    {'K', "FW",    "Farnsworth",  'z', 0, wpm_limit_high, 1, 'w'},
   #endif
-  {'K', "CWPM",  "Cmd speed",   'n', wpm_limit_low, wpm_limit_high, 1, "wpm"},
+  {'K', "CWPM",  "Cmd speed",   'n', wpm_limit_low, wpm_limit_high, 1, 'w'},
   #ifdef FEATURE_POTENTIOMETER
-    {'K', "POT",   "Speed pot",   'b', 0, 1, 1, ""},
+    {'K', "POT",   "Speed pot",   'b', 0, 1, 1, 0},
   #endif
-  {'K', "WT",    "Weight",      'n', 10, 90, 1, ""},
-  {'K', "RATIO", "Dah ratio",   'r', 160, 800, 10, ""},
-  {'K', "REV",   "Paddle rev",  'b', 0, 1, 1, ""},
-  {'K', "MEM",   "Dit/dah mem", 'b', 0, 1, 1, ""},
+  {'K', "WT",    "Weight",      'n', 10, 90, 1, 0},
+  {'K', "RATIO", "Dah ratio",   'r', 160, 800, 10, 0},
+  {'K', "REV",   "Paddle rev",  'b', 0, 1, 1, 0},
+  {'K', "MEM",   "Dit/dah mem", 'b', 0, 1, 1, 0},
   #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
-    {'K', "ECHO",  "Paddle echo", 'b', 0, 1, 1, ""},
+    {'K', "ECHO",  "Paddle echo", 'b', 0, 1, 1, 0},
   #endif
   #ifdef FEATURE_AUTOSPACE
-    {'K', "ASPC",  "Autospace",   'b', 0, 1, 1, ""},
+    {'K', "ASPC",  "Autospace",   'b', 0, 1, 1, 0},
   #endif
   #ifdef FEATURE_MEMORIES
-    {'K', "RPT",   "Mem repeat",  'n', 0, 9900, 100, "ms"},
+    {'K', "RPT",   "Mem repeat",  'n', 0, 9900, 100, 'm'},
   #endif
   #ifdef SETTINGS_TX_CHOICE
-    {'K', "TX",    "Transmitter", 'e', 0, 0, 1, ""},
+    {'K', "TX",    "Transmitter", 'e', 0, 0, 1, 0},
   #endif
   #ifdef SETTINGS_PTT
-    {'K', "LEAD",  "PTT lead",    'n', 0, 500, 10, "ms"},
-    {'K', "TAIL",  "PTT tail",    'n', 0, 1000, 10, "ms"},
+    {'K', "LEAD",  "PTT lead",    'n', 0, 500, 10, 'm'},
+    {'K', "TAIL",  "PTT tail",    'n', 0, 1000, 10, 'm'},
   #endif
-  {'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, "Hz"},
-  {'S', "MODE",  "Sidetone",    'e', 0, 0, 1, ""},
+  {'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
+  {'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
 };
 #define SETTINGS_KEYER_COUNT (sizeof(settings_keyer_items) / sizeof(settings_keyer_items[0]))
 
@@ -4773,19 +4773,50 @@ const byte settings_keyer_modes[] = {IAMBIC_A, IAMBIC_B, ULTIMATIC, BUG, SINGLE_
     , STRAIGHT
   #endif
 };
-const char *const settings_keyer_mode_names[] = {"Iambic A", "Iambic B", "Ultimatic", "Bug", "Single"
+const char settings_keyer_mode_names[][10] PROGMEM = {"Iambic A", "Iambic B", "Ultimatic", "Bug", "Single"
   #if defined(FEATURE_STRAIGHT_KEY_ANY)
     , "Straight"
   #endif
 };
-const char *const settings_keyer_mode_words[] = {"A", "B", "ULT", "BUG", "SGL"
+const char settings_keyer_mode_words[][4] PROGMEM = {"A", "B", "ULT", "BUG", "SGL"
   #if defined(FEATURE_STRAIGHT_KEY_ANY)
     , "STR"
   #endif
 };
 const byte settings_sidetone_modes[] = {SIDETONE_ON, SIDETONE_OFF, SIDETONE_PADDLE_ONLY};
-const char *const settings_sidetone_mode_names[] = {"On", "Off", "Paddle"};
-const char *const settings_sidetone_mode_words[] = {"ON", "OFF", "PDL"};
+const char settings_sidetone_mode_names[][7] PROGMEM = {"On", "Off", "Paddle"};
+const char settings_sidetone_mode_words[][4] PROGMEM = {"ON", "OFF", "PDL"};
+
+//-------------------------------------------------------------------------------------------------------
+
+void settings_keyer_load(byte item, settings_keyer_item &s) {
+
+  // a copy of one of settings_keyer_items, which live in flash
+
+  memcpy_P(&s, &settings_keyer_items[item], sizeof(s));
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+char settings_keyer_group(byte item) {
+
+  return pgm_read_byte(&settings_keyer_items[item].group);
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+const char *settings_keyer_unit(char unit) {
+
+  switch (unit) {
+    case 'w': return "wpm";
+    case 'm': return "ms";
+    case 'h': return "Hz";
+  }
+  return "";
+
+}
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -4850,8 +4881,11 @@ char settings_enum_kind(byte item) {
 
   // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter
 
-  if (settings_keyer_items[item].group == 'S') {return 'S';}
-  return strcmp(settings_keyer_items[item].key, "TX") ? 'M' : 'T';
+  settings_keyer_item s;
+
+  settings_keyer_load(item, s);
+  if (s.group == 'S') {return 'S';}
+  return strcmp(s.key, "TX") ? 'M' : 'T';
 
 }
 
@@ -4878,8 +4912,12 @@ String settings_enum_text(byte item, byte option, byte word) {
   byte txs[6];
 
   switch (settings_enum_kind(item)) {
-    case 'M': return word ? settings_keyer_mode_words[option] : settings_keyer_mode_names[option];
-    case 'S': return word ? settings_sidetone_mode_words[option] : settings_sidetone_mode_names[option];
+    case 'M':
+      if (word) {return String((const __FlashStringHelper *)settings_keyer_mode_words[option]);}
+      return String((const __FlashStringHelper *)settings_keyer_mode_names[option]);
+    case 'S':
+      if (word) {return String((const __FlashStringHelper *)settings_sidetone_mode_words[option]);}
+      return String((const __FlashStringHelper *)settings_sidetone_mode_names[option]);
   }
   settings_tx_list(txs);
   return String(word ? "" : "TX ") + txs[option];
@@ -4890,7 +4928,8 @@ String settings_enum_text(byte item, byte option, byte word) {
 
 int settings_keyer_get(byte item) {
 
-  const settings_keyer_item &s = settings_keyer_items[item];
+  settings_keyer_item s;
+  settings_keyer_load(item, s);
   byte txs[6];
   byte count;
 
@@ -4938,7 +4977,8 @@ int settings_keyer_get(byte item) {
 
 void settings_keyer_set(byte item, int value) {
 
-  const settings_keyer_item &s = settings_keyer_items[item];
+  settings_keyer_item s;
+  settings_keyer_load(item, s);
   byte txs[6];
 
   if (s.type == 'e') {
@@ -5086,7 +5126,10 @@ byte settings_parse_value(char type, const char *token, int keyer_item, const ch
 int settings_keyer_find(char group, const char *key) {
 
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    if ((settings_keyer_items[x].group == group) && (!strcasecmp(settings_keyer_items[x].key, key))) {return x;}
+    if (settings_keyer_group(x) != group) {continue;}
+    settings_keyer_item s;
+    settings_keyer_load(x, s);
+    if (!strcasecmp(s.key, key)) {return x;}
   }
   return -1;
 
@@ -5295,7 +5338,8 @@ byte settings_apply(char group, const char *key, const char *value_token, String
     text = String("Unknown ") + settings_group_word(group) + "." + key;
     return 0;
   }
-  const settings_keyer_item &s = settings_keyer_items[item];
+  settings_keyer_item s;
+  settings_keyer_load(item, s);
   if (value_token) {
     if (!settings_parse_value(s.type, value_token, item, "", &value)) {
       text = String("Bad value ") + value_token;
@@ -5303,7 +5347,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
     }
     settings_keyer_set(item, value);
   }
-  text = String(s.label) + " " + settings_value_text(s.type, settings_keyer_get(item), s.unit, item);
+  text = String(s.label) + " " + settings_value_text(s.type, settings_keyer_get(item), settings_keyer_unit(s.unit), item);
   return 1;
 
 }
@@ -5336,7 +5380,7 @@ byte settings_menu_count(char group) {
     }
   #endif
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    if (settings_keyer_items[x].group == group) {count++;}
+    if (settings_keyer_group(x) == group) {count++;}
   }
   return count + 1;
 
@@ -5409,9 +5453,10 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
   #endif
 
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    if (settings_keyer_items[x].group != group) {continue;}
+    if (settings_keyer_group(x) != group) {continue;}
     if (row--) {continue;}
-    const settings_keyer_item &s = settings_keyer_items[x];
+    settings_keyer_item s;
+    settings_keyer_load(x, s);
     out.label = s.label;
     out.type = s.type;
     out.item = x;
@@ -5419,7 +5464,7 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
     out.min = (s.type == 'e') ? 0 : s.min;
     out.max = (s.type == 'e') ? (settings_enum_count(x) - 1) : s.max;
     out.step = s.step;
-    out.unit = s.unit;
+    out.unit = settings_keyer_unit(s.unit);
     return;
   }
 
@@ -5894,12 +5939,13 @@ void settings_cli_list(PRIMARY_SERIAL_CLS * port_to_use, char group) {
   #endif
 
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    const settings_keyer_item &s = settings_keyer_items[x];
+    settings_keyer_item s;
+    settings_keyer_load(x, s);
     if (s.group != group) {continue;}
     line = String(settings_group_word(group)) + "." + s.key;
     for (byte y = 0; line[y]; y++) {line[y] = tolower(line[y]);}
     while (line.length() < 12) {line.concat(' ');}
-    line.concat(settings_value_text(s.type, settings_keyer_get(x), s.unit, x));
+    line.concat(settings_value_text(s.type, settings_keyer_get(x), settings_keyer_unit(s.unit), x));
     while (line.length() < 24) {line.concat(' ');}
     line.concat(s.label);
     line.concat(" (");
