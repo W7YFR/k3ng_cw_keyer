@@ -23,6 +23,7 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `fix/i2c-wire-timeout` | `fix/oled-nonblocking-redraw` | A stuck I2C bus no longer freezes the keyer |
 | `feature/vband-link` | `feature/oled-font-select` | `FEATURE_VBAND_LINK`: the link to the ESP32 VBand adapter |
 | `feature/settings-menu` | `feature/vband-link` | `FEATURE_SETTINGS_MENU`: settings menu, shortcuts and CLI |
+| `feature/display-msg-delay-setting` | `master` | `default_display_msg_delay` can be set in a settings file |
 | `fix/async-eeprom-write-overrun` | `master` | The background settings write no longer writes one byte past the settings |
 | `fix/straight-key-echo-without-cli` | `master` | Straight key echo to the display builds without the CLI |
 | `fix/prosign-sos-and-warnings` | `master` | SOS decodes to its letters; paddle reads always return; compiler warnings |
@@ -54,6 +55,9 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/settings-menu`: each list starts with "< Back" ("< Exit" on the top level, which leaves the menu and
   command mode) and opens on its second row, with the first scrolled off the top when the rest fills the screen; a
   dah scrolls it into view.
+- `feature/display-msg-delay-setting`: a settings file can set `default_display_msg_delay`, how long a timed
+  display message (a command mode confirmation, say) shows; the default stays 1000 ms. Only on `w7yfr` (`3fd2802`):
+  set to 3000 ms.
 - Only on `w7yfr` (`d55352e`): holding the dit paddle for 10 dits opens the settings menu (command mode with the menu
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
@@ -61,6 +65,10 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/vband-link`: command mode notices the adapter going (its goodbye, or the link timeout) instead of only
   keeping the link alive, without drawing "VBand Off" over its screens. Received text and join/leave lines go on
   behind command mode and show on leaving it, so the display has the whole conversation.
+- `feature/settings-menu`: the keyer's settings table, its labels and the mode names live in flash (`PROGMEM`),
+  about 340 bytes of RAM back. A pause after "/KY" or "/KY WPM" ends it after 3 word spaces instead of a fixed 5 s,
+  and shortcut answers and the menu's and VBand's notices show for 3 s (`SETTINGS_ANSWER_MS`) instead of 1. B on
+  the menu's top level closes the menu and stays in command mode.
 - `feature/settings-menu`: the menu follows the adapter coming and going while it's open. The VBand pages close back
   to the top level with "Adapter off" as the title, and the top level's VBand row appears and disappears, with the
   cursor kept on its row.
