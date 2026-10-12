@@ -1936,7 +1936,8 @@ uint16_t memory_area_end = 0;
   // differs, so flashing only one board after a breaking change says so. Bump it only for changes the other side
   // can't cope with (a changed message format) - new message types don't need it, since both sides ignore types
   // they don't know. Keep it in step with the adapter's MEGA_LINK_PROTOCOL_VERSION.
-  #define VBAND_LINK_PROTOCOL_VERSION 1
+  // 2: SI items carry the menu list they go in.
+  #define VBAND_LINK_PROTOCOL_VERSION 2
   #define VBAND_LINK_STRINGIFY(x) #x
   #define VBAND_LINK_STRING(x) VBAND_LINK_STRINGIFY(x)
   byte vband_link_up = 0;                           // the adapter is being heard from
@@ -1984,6 +1985,7 @@ struct settings_menu_row {                          // one row of the menu: a gr
   const char *unit;
 };
 struct settings_adapter_item {                      // one of the VBand adapter's settings or commands, as it listed them
+  char group;                                       // the menu list it goes in: '-' none, else one of SETTINGS_ADAPTER_GROUPS
   char key[7];
   char label[13];
   char type;                                        // 'b' on/off, 'n' number, 'e' an option, 's' text, 'a' a command (key is the word)
@@ -2001,6 +2003,7 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
+    #define SETTINGS_ADAPTER_GROUPS "RADH"         // the lists under VBand's Settings and Commands: Rooms, Sound, Display, Device
     #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
     #define SETTINGS_TEXT_MAX 32
     settings_adapter_item settings_adapter_items[SETTINGS_ADAPTER_MAX];
@@ -4855,6 +4858,10 @@ const char *settings_group_name(char group) {
     case 'V': return "VBand";
     case 'v': return "VBand Settings";
     case 'c': return "VBand Commands";
+    case 'R': case 'r': return "Rooms";            // the lists under them (SETTINGS_ADAPTER_GROUPS)
+    case 'A': case 'a': return "Sound";
+    case 'D': case 'd': return "Display";
+    case 'H': case 'h': return "Device";
   }
   return "Settings";
 
@@ -5154,16 +5161,16 @@ int settings_keyer_find(char group, const char *key) {
 #ifdef FEATURE_VBAND_LINK
 void settings_adapter_frame(const char *type, char *fields) {
 
-  // the adapter's answers, in any keyer mode: "SI,<i>,<key>,<label>,<type>[,<value>,<min>,<max>,<step>,<unit>]"
+  // the adapter's answers, in any keyer mode: "SI,<i>,<group>,<key>,<label>,<type>[,<value>,<min>,<max>,<step>,<unit>]"
   // per item, "SE,<count>" after the last, "SV,<key>,<value or ?>" to a read or set
 
-  char *field[10];
+  char *field[11];
   byte count = 0;
   byte index;
 
   if (strcmp(type, "SI") && strcmp(type, "SE") && strcmp(type, "SV")) {return;}
   field[count++] = fields;
-  for (char *c = fields; *c && (count < 10); c++) {
+  for (char *c = fields; *c && (count < 11); c++) {
     if (*c == ',') {*c = 0; field[count++] = c + 1;}
   }
 
@@ -5187,37 +5194,39 @@ void settings_adapter_frame(const char *type, char *fields) {
         settings_adapter_texts[item.value][SETTINGS_TEXT_MAX] = 0;
       }
     }
-  } else if (count >= 4) {
+  } else if (count >= 5) {
     index = atoi(field[0]);
     if (index >= SETTINGS_ADAPTER_MAX) {return;}
     settings_adapter_item &item = settings_adapter_items[index];
-    strncpy(item.key, field[1], sizeof(item.key) - 1);
+    item.group = field[1][0];
+    if ((!item.group) || (!strchr(SETTINGS_ADAPTER_GROUPS, item.group))) {item.group = '-';}   // one we don't know: no list
+    strncpy(item.key, field[2], sizeof(item.key) - 1);
     item.key[sizeof(item.key) - 1] = 0;
-    strncpy(item.label, field[2], sizeof(item.label) - 1);
+    strncpy(item.label, field[3], sizeof(item.label) - 1);
     item.label[sizeof(item.label) - 1] = 0;
-    item.type = field[3][0];
-    item.value = (count > 4) ? atoi(field[4]) : 0;
+    item.type = field[4][0];
+    item.value = (count > 5) ? atoi(field[5]) : 0;
     if (item.type == 's') {                         // the text goes in a slot of its own
       item.value = -1;
       if (settings_adapter_text_count < SETTINGS_ADAPTER_TEXTS) {
         item.value = settings_adapter_text_count++;
-        strncpy(settings_adapter_texts[item.value], (count > 4) ? field[4] : "", SETTINGS_TEXT_MAX);
+        strncpy(settings_adapter_texts[item.value], (count > 5) ? field[5] : "", SETTINGS_TEXT_MAX);
         settings_adapter_texts[item.value][SETTINGS_TEXT_MAX] = 0;
       }
     }
-    item.min = (count > 5) ? atoi(field[5]) : 0;
-    item.max = (count > 6) ? atoi(field[6]) : 0;
-    item.step = (count > 7) ? atoi(field[7]) : 1;
+    item.min = (count > 6) ? atoi(field[6]) : 0;
+    item.max = (count > 7) ? atoi(field[7]) : 0;
+    item.step = (count > 8) ? atoi(field[8]) : 1;
     item.unit[0] = 0;
-    if (count > 8) {
-      strncpy(item.unit, field[8], sizeof(item.unit) - 1);
+    if (count > 9) {
+      strncpy(item.unit, field[9], sizeof(item.unit) - 1);
       item.unit[sizeof(item.unit) - 1] = 0;
     }
-    if ((item.type == 'e') && (count > 8)) {       // the options' names go in a slot of their own (after step is read: it holds the slot)
+    if ((item.type == 'e') && (count > 9)) {       // the options' names go in a slot of their own (after step is read: it holds the slot)
       item.step = -1;
       if (settings_adapter_option_count < SETTINGS_ADAPTER_OPTION_LISTS) {
         item.step = settings_adapter_option_count++;
-        strncpy(settings_adapter_options[item.step], field[8], SETTINGS_OPTIONS_MAX);
+        strncpy(settings_adapter_options[item.step], field[9], SETTINGS_OPTIONS_MAX);
         settings_adapter_options[item.step][SETTINGS_OPTIONS_MAX] = 0;
       }
       item.unit[0] = 0;
@@ -5382,6 +5391,10 @@ const char *settings_menu_children(char group) {
     case 0:   return "VKST";                       // VBand, Keying, Sidetone, Transmit
     case 'K': return "w";                          // Speed
     case 'V': return "cv";                         // Commands, Settings
+    #ifdef FEATURE_VBAND_LINK
+      case 'v': return SETTINGS_ADAPTER_GROUPS;    // the same lists under each: Rooms, Sound, Display, Device
+      case 'c': return "radh";
+    #endif
   }
   return "";
 
@@ -5389,9 +5402,42 @@ const char *settings_menu_children(char group) {
 
 //-------------------------------------------------------------------------------------------------------
 
+char settings_menu_adapter_kind(char group) {
+
+  // which of the adapter's halves a menu list shows: 's' its settings (VBand > Settings and the lists under it), 'a'
+  // its commands, 0 neither
+
+  if (group == 'v') {return 's';}
+  if (group == 'c') {return 'a';}
+  #ifdef FEATURE_VBAND_LINK
+    if (group && strchr(SETTINGS_ADAPTER_GROUPS, group)) {return 's';}
+    if (group && strchr("radh", group)) {return 'a';}
+  #endif
+  return 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+#ifdef FEATURE_VBAND_LINK
+char settings_adapter_list(byte item) {
+
+  // the menu list one of the adapter's items goes in: its group's list under Settings (the group's letter) or
+  // Commands (in lower case), or Settings / Commands themselves
+
+  settings_adapter_item &s = settings_adapter_items[item];
+
+  if (s.group == '-') {return (s.type == 'a') ? 'c' : 'v';}
+  return (s.type == 'a') ? tolower(s.group) : s.group;
+
+}
+#endif //FEATURE_VBAND_LINK
+
+//-------------------------------------------------------------------------------------------------------
+
 byte settings_menu_child_shown(char child) {
 
-  // VBand while the adapter is there; a keyer list when this build has something in it
+  // VBand while the adapter is there; any other list when it has something in it
 
   if (child == 'V') {
     #ifdef FEATURE_VBAND_LINK
@@ -5401,6 +5447,14 @@ byte settings_menu_child_shown(char child) {
     #endif
   }
   if ((child == 'v') || (child == 'c')) {return 1;}
+  #ifdef FEATURE_VBAND_LINK
+    if (settings_menu_adapter_kind(child)) {
+      for (byte x = 0; x < settings_adapter_count; x++) {
+        if (settings_adapter_list(x) == child) {return 1;}
+      }
+      return 0;
+    }
+  #endif
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
     if (settings_keyer_menu(x) == child) {return 1;}
   }
@@ -5418,9 +5472,9 @@ byte settings_menu_count(char group) {
     if (settings_menu_child_shown(*child)) {count++;}
   }
   #ifdef FEATURE_VBAND_LINK
-    if ((group == 'v') || (group == 'c')) {
+    if (settings_menu_adapter_kind(group)) {
       for (byte x = 0; x < settings_adapter_count; x++) {
-        if ((settings_adapter_items[x].type == 'a') == (group == 'c')) {count++;}
+        if (settings_adapter_list(x) == group) {count++;}
       }
       return count;
     }
@@ -5429,6 +5483,76 @@ byte settings_menu_count(char group) {
     if (settings_keyer_menu(x) == group) {count++;}
   }
   return count;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_menu_get_child(char group, byte &row, settings_menu_row &out) {
+
+  // row "row" of the lists a list opens, if it's one of them (1); otherwise row less the number of them (0)
+
+  for (const char *child = settings_menu_children(group); *child; child++) {
+    if (!settings_menu_child_shown(*child)) {continue;}
+    if (row--) {continue;}
+    out.type = 'g';
+    out.target = *child;
+    if (*child == 'v') {                           // under VBand, without repeating it
+      out.label = "Settings";
+    } else if (*child == 'c') {
+      out.label = "Commands";
+    } else {
+      out.label = settings_group_name(*child);
+    }
+    return 1;
+  }
+  return 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_menu_get_setting(char group, byte &row, settings_menu_row &out) {
+
+  // row "row" of a list's own settings (or the adapter's commands), if it's one of them (1); otherwise row less the
+  // number of them (0)
+
+  #ifdef FEATURE_VBAND_LINK
+    if (settings_menu_adapter_kind(group)) {
+      for (byte x = 0; x < settings_adapter_count; x++) {
+        settings_adapter_item &s = settings_adapter_items[x];
+        if (settings_adapter_list(x) != group) {continue;}
+        if (row--) {continue;}
+        out.label = s.label;
+        out.type = s.type;
+        out.item = x;
+        out.value = s.value;
+        out.min = s.min;
+        out.max = s.max;
+        out.step = (s.type == 'e') ? 1 : s.step;
+        out.unit = settings_adapter_unit(x);
+        return 1;
+      }
+      return 0;
+    }
+  #endif
+
+  for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
+    if (settings_keyer_menu(x) != group) {continue;}
+    if (row--) {continue;}
+    settings_keyer_item s;
+    settings_keyer_load(x, s);
+    out.label = s.label;
+    out.type = s.type;
+    out.item = x;
+    out.value = settings_keyer_get(x);
+    out.min = (s.type == 'e') ? 0 : s.min;
+    out.max = (s.type == 'e') ? (settings_enum_count(x) - 1) : s.max;
+    out.step = s.step;
+    out.unit = settings_keyer_unit(s.unit);
+    return 1;
+  }
+  return 0;
 
 }
 
@@ -5456,55 +5580,12 @@ void settings_menu_get_row(char group, byte row, settings_menu_row &out) {
   }
   row--;
 
-  for (const char *child = settings_menu_children(group); *child; child++) {   // the lists it opens, first
-    if (!settings_menu_child_shown(*child)) {continue;}
-    if (row--) {continue;}
-    out.type = 'g';
-    out.target = *child;
-    if (*child == 'v') {                           // under VBand, without repeating it
-      out.label = "Settings";
-    } else if (*child == 'c') {
-      out.label = "Commands";
-    } else {
-      out.label = settings_group_name(*child);
-    }
-    return;
-  }
-
-  #ifdef FEATURE_VBAND_LINK
-    if ((group == 'v') || (group == 'c')) {
-      for (byte x = 0; x < settings_adapter_count; x++) {
-        settings_adapter_item &s = settings_adapter_items[x];
-        if ((s.type == 'a') != (group == 'c')) {continue;}
-        if (row--) {continue;}
-        out.label = s.label;
-        out.type = s.type;
-        out.item = x;
-        out.value = s.value;
-        out.min = s.min;
-        out.max = s.max;
-        out.step = (s.type == 'e') ? 1 : s.step;
-        out.unit = settings_adapter_unit(x);
-        return;
-      }
-      return;
-    }
-  #endif
-
-  for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
-    if (settings_keyer_menu(x) != group) {continue;}
-    if (row--) {continue;}
-    settings_keyer_item s;
-    settings_keyer_load(x, s);
-    out.label = s.label;
-    out.type = s.type;
-    out.item = x;
-    out.value = settings_keyer_get(x);
-    out.min = (s.type == 'e') ? 0 : s.min;
-    out.max = (s.type == 'e') ? (settings_enum_count(x) - 1) : s.max;
-    out.step = s.step;
-    out.unit = settings_keyer_unit(s.unit);
-    return;
+  if (settings_menu_adapter_kind(group)) {         // VBand's lists: their own commands and settings, then the lists they open
+    if (settings_menu_get_setting(group, row, out)) {return;}
+    settings_menu_get_child(group, row, out);
+  } else {                                         // the keyer's: the lists they open, then their settings
+    if (settings_menu_get_child(group, row, out)) {return;}
+    settings_menu_get_setting(group, row, out);
   }
 
 }
@@ -5533,7 +5614,7 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
       line = ((top + x) == cursor) ? (editing ? "*" : ">") : " ";
       line.concat(row.label);
       value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit,
-                                  ((group == 'v') || (group == 'c')) ? -1 : row.item);
+                                  settings_menu_adapter_kind(group) ? -1 : row.item);
       if (row.type == 'g') {value = ">";}          // opens a list
       if ((row.type == 'k') || (row.type == 'x')) {value = "";}
       if ((line.length() + 1 + value.length()) > LCD_COLUMNS) {        // a long name: as much as fits
@@ -5600,7 +5681,7 @@ byte settings_menu_show_answer() {
 byte settings_menu_save(char group, settings_menu_row &row, int value) {
 
   #ifdef FEATURE_VBAND_LINK
-    if (group == 'v') {
+    if (settings_menu_adapter_kind(group) == 's') {
       if (!settings_adapter_set(settings_adapter_items[row.item].key, value)) {
         lcd_center_print_timed("VBand no answer", 0, SETTINGS_ANSWER_MS);
         send_char('?', KEYER_NORMAL);
@@ -5620,7 +5701,27 @@ char settings_menu_parent(char group) {
 
   if ((group == 'v') || (group == 'c')) {return 'V';}
   if (group == 'w') {return 'K';}
+  switch (settings_menu_adapter_kind(group)) {     // the lists under VBand's Settings and Commands
+    case 's': return 'v';
+    case 'a': return 'c';
+  }
   return 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+byte settings_menu_depth(char group) {
+
+  // 0 for the top level, 1 for a list it opens, and so on
+
+  byte depth = 0;
+
+  while (group) {
+    group = settings_menu_parent(group);
+    depth++;
+  }
+  return depth;
 
 }
 
@@ -5644,7 +5745,7 @@ byte settings_menu(char group) {
   // run from here shows its answer, then the menu comes back where it was.
 
   byte cursor = 1;                                 // row 0 is Exit / "< Back"
-  byte back_cursor[2] = {1, 1};                    // where to put the cursor on going back to the top level / to VBand
+  byte back_cursor[3] = {1, 1, 1};                 // where to put the cursor on going back to a list, by its depth
   byte top = settings_menu_top(group, cursor);
   byte editing = 0;
   int edit_value = 0;
@@ -5669,7 +5770,7 @@ byte settings_menu(char group) {
       if (vband_link_up != had_adapter) {          // the adapter came or went while the menu was open
         had_adapter = vband_link_up;
         if (!vband_link_up) {note = "Adapter off";}
-        if ((!vband_link_up) && ((group == 'V') || (group == 'v') || (group == 'c'))) {   // its pages are gone
+        if ((!vband_link_up) && ((group == 'V') || settings_menu_adapter_kind(group))) {   // its pages are gone
           group = 0;
           cursor = 1;
           editing = 0;
@@ -5718,7 +5819,7 @@ byte settings_menu(char group) {
           return 1;
         } else if (row.type == 'k') {
           group = settings_menu_parent(group);
-          cursor = back_cursor[group ? 1 : 0];
+          cursor = back_cursor[settings_menu_depth(group)];
           top = settings_menu_top(group, cursor);
         } else if (row.type == 'g') {
           #ifdef FEATURE_VBAND_LINK
@@ -5729,7 +5830,7 @@ byte settings_menu(char group) {
               break;
             }
           #endif
-          back_cursor[group ? 1 : 0] = cursor;
+          back_cursor[settings_menu_depth(group)] = cursor;
           group = row.target;
           cursor = 1;
           top = settings_menu_top(group, cursor);
@@ -5765,7 +5866,7 @@ byte settings_menu(char group) {
           editing = 0;
         } else if (group) {
           group = settings_menu_parent(group);
-          cursor = back_cursor[group ? 1 : 0];
+          cursor = back_cursor[settings_menu_depth(group)];
           top = settings_menu_top(group, cursor);
         } else {
           settings_menu_close();
