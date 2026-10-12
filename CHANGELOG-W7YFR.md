@@ -58,6 +58,10 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/display-msg-delay-setting`: a settings file can set `default_display_msg_delay`, how long a timed
   display message (a command mode confirmation, say) shows; the default stays 1000 ms. Only on `w7yfr` (`3fd2802`):
   set to 3000 ms.
+- `feature/settings-menu`: the menu is grouped. The top level opens VBand, Keying, Sidetone and Transmit; Keying
+  opens Speed (Character, Farnsworth, Cmd speed, Speed pot) above Mode, Weight and the rest; Transmit has the
+  transmitter, PTT lead and tail and memory repeat. A row that opens a list shows `>`. The keyed and typed names
+  don't change (`/KY WPM`, `ky.wpm`); the WPM setting is labelled "Character".
 - Only on `w7yfr` (`d55352e`): holding the dit paddle for 10 dits opens the settings menu (command mode with the menu
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
