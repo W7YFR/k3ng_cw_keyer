@@ -51,6 +51,7 @@
 #define lcd_i2c_address_sainsmart_lcd 0x27                // I2C address of display for FEATURE_LCD_SAINSMART_I2C 
 #define oled_i2c_address_ssd1306 0x3C                     // I2C address of display for FEATURE_OLED_SSD1306
 #define oled_ssd1306_font X11fixed7x14B                  // fixed-width SSD1306Ascii font for FEATURE_OLED_SSD1306; LCD_COLUMNS x LCD_ROWS must fit 128x64 pixels with it (e.g. X11fixed7x14B: 18 x 4, System5x7: 21 x 8)
+#define default_display_msg_delay 3000                // ms a timed display message (a command mode confirmation, say) shows
 #define lcd_i2c_address_twiliquidcrystal_lcd 0x27                // I2C address of display for FEATURE_LCD_TWILIQUIDCRYSTAL 
 #define hell_pixel_microseconds 4025
 #define program_memory_limit_consec_spaces 1
