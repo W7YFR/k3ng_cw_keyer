@@ -57,6 +57,12 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/settings-menu`: each list starts with "< Back" ("< Exit" on the top level, which leaves the menu and
   command mode) and opens on its second row, with the first scrolled off the top when the rest fills the screen; a
   dah scrolls it into view.
+- `feature/vband-link`: `STU` frames update the adapter's status screen while it's still showing (nothing else has
+  taken the display, and you haven't keyed over it), so the adapter's connecting screen stays up with a clock.
+- `feature/settings-menu`: VBand > Settings has an LED list. An adapter setting can sit in a Commands list (a
+  lower-case group letter): the channel selector, in Commands > Rooms. R takes a command the adapter offers with an
+  answer (`OF`): Who's here off VBand shows "R: Connect". In a list of options, dit goes to the next one and dah back,
+  as rows do; numbers are unchanged.
 - `feature/farnsworth-effective-speed`: `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED` turns Farnsworth the other way round.
   The speed is the character speed, which the paddles always send at, and the Farnsworth setting (menu, `\M`, or
   its pot) a slower effective speed that memories and buffered sending stretch their spacing to; it's off at 0 or at
@@ -84,6 +90,8 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
 ### Fixed
+- `feature/settings-menu`: in command mode, the adapter's connecting screen kept up: a Connect from the menu froze
+  its clock and missed the screen that ends it.
 - `feature/vband-link`: command mode notices the adapter going (its goodbye, or the link timeout) instead of only
   keeping the link alive, without drawing "VBand Off" over its screens. Received text and join/leave lines go on
   behind command mode and show on leaving it, so the display has the whole conversation.
