@@ -2006,7 +2006,7 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
-    #define SETTINGS_ADAPTER_GROUPS "RADH"         // the lists under VBand's Settings and Commands: Rooms, Sound, Display, Device
+    #define SETTINGS_ADAPTER_GROUPS "RADLH"        // the lists under VBand's Settings and Commands: Rooms, Sound, Display, LED, Device
     #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
     #define SETTINGS_TEXT_MAX 32
     settings_adapter_item settings_adapter_items[SETTINGS_ADAPTER_MAX];
@@ -4870,6 +4870,7 @@ const char *settings_group_name(char group) {
     case 'R': case 'r': return "Rooms";            // the lists under them (SETTINGS_ADAPTER_GROUPS)
     case 'A': case 'a': return "Sound";
     case 'D': case 'd': return "Display";
+    case 'L': case 'l': return "LED";
     case 'H': case 'h': return "Device";
   }
   return "Settings";
@@ -5401,8 +5402,8 @@ const char *settings_menu_children(char group) {
     case 'K': return "w";                          // Speed
     case 'V': return "cv";                         // Commands, Settings
     #ifdef FEATURE_VBAND_LINK
-      case 'v': return SETTINGS_ADAPTER_GROUPS;    // the same lists under each: Rooms, Sound, Display, Device
-      case 'c': return "radh";
+      case 'v': return SETTINGS_ADAPTER_GROUPS;    // the same lists under each: Rooms, Sound, Display, LED, Device
+      case 'c': return "radlh";
     #endif
   }
   return "";
@@ -5420,7 +5421,7 @@ char settings_menu_adapter_kind(char group) {
   if (group == 'c') {return 'a';}
   #ifdef FEATURE_VBAND_LINK
     if (group && strchr(SETTINGS_ADAPTER_GROUPS, group)) {return 's';}
-    if (group && strchr("radh", group)) {return 'a';}
+    if (group && strchr("radlh", group)) {return 'a';}
   #endif
   return 0;
 
