@@ -1949,6 +1949,19 @@ uint16_t memory_area_end = 0;
   byte vband_link_rx_length = 0;
   byte vband_link_in_frame = 0;
   char vband_link_speaker[9] = "";                  // tag of whoever the display's current line belongs to
+  #ifdef FEATURE_DISPLAY
+    // A sender's message so far, repeated when their line starts again after someone else's (or a join or leave
+    // line) interrupted it: the last two display lines' worth, for the last few senders.
+    #define VBAND_LINK_RECAP_SENDERS 3
+    #define VBAND_LINK_RECAP_MS 5000                // quiet this long, a sender's message is over: the next starts afresh
+    struct vband_link_recap_slot {
+      char tag[9];
+      char text[(2 * LCD_COLUMNS) + 1];
+      unsigned long last_time;
+    };
+    vband_link_recap_slot vband_link_recaps[VBAND_LINK_RECAP_SENDERS];
+    byte vband_link_recap_quiet = 0;                // 1 while a tag or a repeat is printed: not message text
+  #endif
   byte vband_link_text_behind_screen = 0;           // received text goes into the scroll buffer without replacing a status screen
   #define VBAND_LINK_COMMAND_MAX 8
   char vband_link_pending_command[VBAND_LINK_COMMAND_MAX + 1] = "";  // keyed after "/" in command mode, sent on leaving it
@@ -4029,6 +4042,10 @@ void display_scroll_print_char(char charin){
   static byte column_pointer = 0;
   static byte row_pointer = 0;
   static byte holding_space = 0;
+
+  #ifdef FEATURE_VBAND_LINK
+    vband_link_recap_add(charin);
+  #endif
   byte x = 0;
 
   #ifdef DEBUG_DISPLAY_SCROLL_PRINT_CHAR
@@ -4260,6 +4277,9 @@ void vband_link_set_ready(byte ready) {
   if (ready == vband_link_ready) {return;}
 
   vband_link_speaker[0] = 0;                       // the next line gets its tag again
+  #ifdef FEATURE_DISPLAY
+    vband_link_recaps_clear();
+  #endif
 
   if (ready) {
     vband_link_ready = 1;
@@ -4423,20 +4443,96 @@ void vband_link_check_version(int adapter_protocol) {
 //-------------------------------------------------------------------------------------------------------
 
 #ifdef FEATURE_DISPLAY
+int vband_link_recap_find(const char *tag, byte make) {
+
+  // the slot keeping tag's message, or -1; make: if there's none, take a free slot or the one quiet longest
+
+  byte slot = 0;
+
+  for (byte x = 0; x < VBAND_LINK_RECAP_SENDERS; x++) {
+    if (!strcmp(vband_link_recaps[x].tag, tag)) {return x;}
+  }
+  if (!make) {return -1;}
+  for (byte x = 0; x < VBAND_LINK_RECAP_SENDERS; x++) {
+    if (!vband_link_recaps[x].tag[0]) {
+      slot = x;
+      break;
+    }
+    if (vband_link_recaps[x].last_time < vband_link_recaps[slot].last_time) {slot = x;}
+  }
+  strncpy(vband_link_recaps[slot].tag, tag, sizeof(vband_link_recaps[slot].tag) - 1);
+  vband_link_recaps[slot].tag[sizeof(vband_link_recaps[slot].tag) - 1] = 0;
+  vband_link_recaps[slot].text[0] = 0;
+  vband_link_recaps[slot].last_time = millis();
+  return slot;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_recap_add(char charin) {
+
+  // a character shown on the current line's sender's line: kept as their message so far
+
+  if (vband_link_recap_quiet || (!vband_link_ready) || (!vband_link_speaker[0])) {return;}
+
+  vband_link_recap_slot &slot = vband_link_recaps[vband_link_recap_find(vband_link_speaker, 1)];
+  byte length;
+
+  if ((millis() - slot.last_time) > VBAND_LINK_RECAP_MS) {slot.text[0] = 0;}   // a new message
+  slot.last_time = millis();
+  if (charin == '\n') {return;}
+  length = strlen(slot.text);
+  if (length >= (sizeof(slot.text) - 1)) {     // full: the oldest goes
+    memmove(slot.text, slot.text + 1, length);
+    length--;
+  }
+  slot.text[length] = charin;
+  slot.text[length + 1] = 0;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void vband_link_recaps_clear() {
+
+  for (byte x = 0; x < VBAND_LINK_RECAP_SENDERS; x++) {
+    vband_link_recaps[x].tag[0] = 0;
+  }
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 void vband_link_set_speaker(const char *tag) {
 
   // While VBand traffic is being shown, each change of who's sending starts a new display line with "TAG>".
-  // Otherwise (no adapter) the display scrolls as usual.
+  // Otherwise (no adapter) the display scrolls as usual. If the new line's sender was interrupted mid-message,
+  // it starts with their message so far (its last two display lines' worth), so it reads whole.
+
+  int recap;
+  const char *text;
+  byte room;
 
   if ((!vband_link_ready) || (strncmp(tag, vband_link_speaker, sizeof(vband_link_speaker) - 1) == 0)) {return;}
 
   strncpy(vband_link_speaker, tag, sizeof(vband_link_speaker) - 1);
   vband_link_speaker[sizeof(vband_link_speaker) - 1] = 0;
+  vband_link_recap_quiet = 1;
   display_scroll_print_char('\n');
   for (byte x = 0; vband_link_speaker[x]; x++) {
     display_scroll_print_char(vband_link_speaker[x]);
   }
   display_scroll_print_char('>');
+  recap = vband_link_recap_find(vband_link_speaker, 0);
+  if ((recap >= 0) && ((millis() - vband_link_recaps[recap].last_time) <= VBAND_LINK_RECAP_MS)) {
+    text = vband_link_recaps[recap].text;
+    room = (2 * LCD_COLUMNS) - (strlen(vband_link_speaker) + 1);   // two lines, less the tag
+    if (strlen(text) > room) {text += strlen(text) - room;}
+    while (*text == ' ') {text++;}
+    while (*text) {display_scroll_print_char(*text++);}
+  }
+  vband_link_recap_quiet = 0;
 
 }
 
@@ -4463,15 +4559,16 @@ void vband_link_show_received(char *fields) {
 
 void vband_link_show_system(char *text) {
 
-  // "SYS,<text>" - a line of its own in the scrolling conversation, e.g. someone joining or leaving
+  // "SYS,<text>" - a line of its own in the scrolling conversation, e.g. someone joining or leaving. It ends the
+  // current sender's line, so whoever sends next starts a new tagged line, repeating their message so far.
 
+  vband_link_speaker[0] = 0;
   vband_link_text_behind_screen = 1;
   display_scroll_print_char('\n');
   while (*text) {
     display_scroll_print_char(*text++);
   }
   vband_link_text_behind_screen = 0;
-  vband_link_speaker[0] = 0;                       // whoever sends next starts a new tagged line
 
 }
 
