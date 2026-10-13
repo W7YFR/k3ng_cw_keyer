@@ -57,6 +57,11 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 - `feature/settings-menu`: each list starts with "< Back" ("< Exit" on the top level, which leaves the menu and
   command mode) and opens on its second row, with the first scrolled off the top when the rest fills the screen; a
   dah scrolls it into view.
+- `feature/vband-link`: an interrupted sender's line repeats their message so far. When someone else's sending (or a
+  join or leave line) cuts into a message, the sender's next line starts with what they'd sent, the last two display
+  lines' worth, then carries on ("A>HEL", "B>HI", "A>HELLO"). Kept for the last 3 senders, your own keying included;
+  5 s of quiet ends a message. Clearing the display forgets it. Normal sending checked on hardware; the repeat itself
+  hasn't been seen on air yet.
 - `feature/vband-link`: `STU` frames update the adapter's status screen while it's still showing (nothing else has
   taken the display, and you haven't keyed over it), so the adapter's connecting screen stays up with a clock.
 - `feature/settings-menu`: VBand > Settings has an LED list. An adapter setting can sit in a Commands list (a
