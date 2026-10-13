@@ -5209,7 +5209,7 @@ void settings_adapter_frame(const char *type, char *fields) {
     if (index >= SETTINGS_ADAPTER_MAX) {return;}
     settings_adapter_item &item = settings_adapter_items[index];
     item.group = field[1][0];
-    if ((!item.group) || (!strchr(SETTINGS_ADAPTER_GROUPS, item.group))) {item.group = '-';}   // one we don't know: no list
+    if ((!item.group) || (!strchr(SETTINGS_ADAPTER_GROUPS, toupper(item.group)))) {item.group = '-';}   // one we don't know: no list
     strncpy(item.key, field[2], sizeof(item.key) - 1);
     item.key[sizeof(item.key) - 1] = 0;
     strncpy(item.label, field[3], sizeof(item.label) - 1);
@@ -5433,11 +5433,13 @@ char settings_menu_adapter_kind(char group) {
 char settings_adapter_list(byte item) {
 
   // the menu list one of the adapter's items goes in: its group's list under Settings (the group's letter) or
-  // Commands (in lower case), or Settings / Commands themselves
+  // Commands (in lower case), or Settings / Commands themselves. A setting the adapter lists among its commands
+  // comes with its group in lower case.
 
   settings_adapter_item &s = settings_adapter_items[item];
 
   if (s.group == '-') {return (s.type == 'a') ? 'c' : 'v';}
+  if (islower(s.group)) {return s.group;}
   return (s.type == 'a') ? tolower(s.group) : s.group;
 
 }
@@ -5691,7 +5693,7 @@ byte settings_menu_show_answer() {
 byte settings_menu_save(char group, settings_menu_row &row, int value) {
 
   #ifdef FEATURE_VBAND_LINK
-    if (settings_menu_adapter_kind(group) == 's') {
+    if (settings_menu_adapter_kind(group)) {       // one of the adapter's settings, in its Settings or Commands lists
       if (!settings_adapter_set(settings_adapter_items[row.item].key, value)) {
         lcd_center_print_timed("VBand no answer", 0, SETTINGS_ANSWER_MS);
         send_char('?', KEYER_NORMAL);
