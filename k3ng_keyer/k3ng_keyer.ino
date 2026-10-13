@@ -1954,6 +1954,9 @@ uint16_t memory_area_end = 0;
   char vband_link_pending_command[VBAND_LINK_COMMAND_MAX + 1] = "";  // keyed after "/" in command mode, sent on leaving it
   byte vband_link_version_checked = 0;              // since the link last came up
   char vband_link_command_reply = 0;                // the adapter's "CR" answer to "CK": '1' known command, '0' not
+  #ifdef FEATURE_DISPLAY
+    unsigned long vband_link_status_clear_time = 0;  // when the adapter's last status screen times out, while it's showing
+  #endif
 #endif //FEATURE_VBAND_LINK
 
 #if defined(FEATURE_VBAND_LINK) && defined(FEATURE_DISPLAY)
@@ -4361,6 +4364,10 @@ void vband_link_handle_frame() {
   #ifdef FEATURE_DISPLAY
     if (strcmp(vband_link_rx_frame, "ST") == 0) {
       vband_link_show_status(fields);
+    } else if (strcmp(vband_link_rx_frame, "STU") == 0) {   // an update to the status screen, only while it's still showing
+      if ((lcd_status == LCD_TIMED_MESSAGE) && (lcd_timed_message_clear_time == vband_link_status_clear_time)) {
+        vband_link_show_status(fields);
+      }
     } else if (strcmp(vband_link_rx_frame, "RX") == 0) {
       vband_link_show_received(fields);
     } else if (strcmp(vband_link_rx_frame, "SYS") == 0) {
@@ -4472,7 +4479,8 @@ void vband_link_show_system(char *text) {
 
 void vband_link_show_status(char *fields) {
 
-  // "ST,<ms>,<row 0>[|<row 1>...]" - a timed status screen, rows already shortened by the adapter
+  // "ST,<ms>,<row 0>[|<row 1>...]" - a timed status screen, rows already shortened by the adapter; "STU" has the
+  // same fields and updates the screen while nothing else has replaced it
 
   char *row_text = strchr(fields, ',');
   unsigned int duration = atoi(fields);
@@ -4492,6 +4500,7 @@ void vband_link_show_status(char *fields) {
     lcd_center_print_timed(row_text, row, duration);
     row_text = row_end ? (row_end + 1) : NULL;
   }
+  vband_link_status_clear_time = lcd_timed_message_clear_time;   // anything else on the display changes it
 
 }
 #endif //FEATURE_DISPLAY
