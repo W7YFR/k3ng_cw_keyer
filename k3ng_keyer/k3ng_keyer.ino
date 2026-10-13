@@ -5808,11 +5808,11 @@ byte settings_menu(char group) {
     switch (cw_char) {
       case 0:                                      // woken without a key: something changed, draw it again
         break;
-      case 1:                                      // E (dit) - down, or lower the value
-      case 2:                                      // T (dah) - up, or raise the value
+      case 1:                                      // E (dit) - down, the next option, or lower the value
+      case 2:                                      // T (dah) - up, the option before, or raise the value
         if (editing) {
-          if (row.type == 'e') {                   // options wrap around
-            edit_value = (edit_value + ((cw_char == 2) ? 1 : row.max) ) % (row.max + 1);
+          if (row.type == 'e') {                   // options go down the list as rows do, and wrap around
+            edit_value = (edit_value + ((cw_char == 1) ? 1 : row.max) ) % (row.max + 1);
           } else {
             edit_value = constrain(edit_value + ((cw_char == 2) ? row.step : -row.step), row.min, row.max);
           }
