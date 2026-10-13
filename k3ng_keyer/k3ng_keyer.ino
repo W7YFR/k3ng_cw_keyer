@@ -4420,6 +4420,10 @@ void vband_link_handle_frame() {
     #ifdef FEATURE_DISPLAY
       if ((strcmp(vband_link_rx_frame, "ST") == 0) && ((long)(vband_link_answer_until - millis()) > 0)) {
         vband_link_show_status(fields);            // the answer to a command run from command mode
+      } else if ((strcmp(vband_link_rx_frame, "STU") == 0) && (lcd_status == LCD_TIMED_MESSAGE) &&
+                 (lcd_timed_message_clear_time == vband_link_status_clear_time) && ((long)(vband_link_answer_until - millis()) > 0)) {
+        vband_link_show_status(fields);            // that answer, still going (connecting): and the screen that ends it
+        vband_link_answer_until = millis() + 5000; // shows too
       }
     #endif
     return;
