@@ -2064,7 +2064,7 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
-    #define SETTINGS_ADAPTER_GROUPS "RADH"         // the lists under VBand's Settings and Commands: Rooms, Sound, Display, Device
+    #define SETTINGS_ADAPTER_GROUPS "RADLH"        // the lists under VBand's Settings and Commands: Rooms, Sound, Display, LED, Device
     #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
     #define SETTINGS_TEXT_MAX 32
     settings_adapter_item settings_adapter_items[SETTINGS_ADAPTER_MAX];
@@ -2077,6 +2077,8 @@ struct settings_adapter_item {                      // one of the VBand adapter'
     char settings_adapter_kind = 0;                 // which half of the adapter's list is held: 's' settings, 'a' commands
     byte settings_adapter_count = 0;
     byte settings_adapter_listed = 0;               // the whole list ("SE") has come
+    char settings_adapter_offer[VBAND_LINK_COMMAND_MAX + 1] = "";   // a command offered with an answer ("OF"), run by keying R
+    char settings_adapter_offer_label[13] = "";
     byte settings_adapter_reply = 0;                // answer to a read or set: 0 none yet, 1 value, 2 no such setting
     int settings_adapter_reply_value = 0;
   #endif
@@ -4571,6 +4573,10 @@ void vband_link_handle_frame() {
     #ifdef FEATURE_DISPLAY
       if ((strcmp(vband_link_rx_frame, "ST") == 0) && ((long)(vband_link_answer_until - millis()) > 0)) {
         vband_link_show_status(fields);            // the answer to a command run from command mode
+      } else if ((strcmp(vband_link_rx_frame, "STU") == 0) && (lcd_status == LCD_TIMED_MESSAGE) &&
+                 (lcd_timed_message_clear_time == vband_link_status_clear_time) && ((long)(vband_link_answer_until - millis()) > 0)) {
+        vband_link_show_status(fields);            // that answer, still going (connecting): and the screen that ends it
+        vband_link_answer_until = millis() + 5000; // shows too
       }
     #endif
     return;
@@ -5048,6 +5054,7 @@ const char *settings_group_name(char group) {
     case 'R': case 'r': return "Rooms";            // the lists under them (SETTINGS_ADAPTER_GROUPS)
     case 'A': case 'a': return "Sound";
     case 'D': case 'd': return "Display";
+    case 'L': case 'l': return "LED";
     case 'H': case 'h': return "Device";
   }
   return "Settings";
@@ -5349,19 +5356,26 @@ int settings_keyer_find(char group, const char *key) {
 void settings_adapter_frame(const char *type, char *fields) {
 
   // the adapter's answers, in any keyer mode: "SI,<i>,<group>,<key>,<label>,<type>[,<value>,<min>,<max>,<step>,<unit>]"
-  // per item, "SE,<count>" after the last, "SV,<key>,<value or ?>" to a read or set
+  // per item, "SE,<count>" after the last, "SV,<key>,<value or ?>" to a read or set, and "OF,<command>,<label>"
+  // with a command's answer: a command the menu offers (settings_menu_show_answer())
 
   char *field[11];
   byte count = 0;
   byte index;
 
-  if (strcmp(type, "SI") && strcmp(type, "SE") && strcmp(type, "SV")) {return;}
+  if (strcmp(type, "SI") && strcmp(type, "SE") && strcmp(type, "SV") && strcmp(type, "OF")) {return;}
   field[count++] = fields;
   for (char *c = fields; *c && (count < 11); c++) {
     if (*c == ',') {*c = 0; field[count++] = c + 1;}
   }
 
-  if (!strcmp(type, "SE")) {
+  if (!strcmp(type, "OF")) {
+    if (count < 2) {return;}
+    strncpy(settings_adapter_offer, field[0], sizeof(settings_adapter_offer) - 1);
+    settings_adapter_offer[sizeof(settings_adapter_offer) - 1] = 0;
+    strncpy(settings_adapter_offer_label, field[1], sizeof(settings_adapter_offer_label) - 1);
+    settings_adapter_offer_label[sizeof(settings_adapter_offer_label) - 1] = 0;
+  } else if (!strcmp(type, "SE")) {
     settings_adapter_listed = 1;
   } else if (!strcmp(type, "SV")) {
     if (count < 2) {return;}
@@ -5386,7 +5400,7 @@ void settings_adapter_frame(const char *type, char *fields) {
     if (index >= SETTINGS_ADAPTER_MAX) {return;}
     settings_adapter_item &item = settings_adapter_items[index];
     item.group = field[1][0];
-    if ((!item.group) || (!strchr(SETTINGS_ADAPTER_GROUPS, item.group))) {item.group = '-';}   // one we don't know: no list
+    if ((!item.group) || (!strchr(SETTINGS_ADAPTER_GROUPS, toupper(item.group)))) {item.group = '-';}   // one we don't know: no list
     strncpy(item.key, field[2], sizeof(item.key) - 1);
     item.key[sizeof(item.key) - 1] = 0;
     strncpy(item.label, field[3], sizeof(item.label) - 1);
@@ -5579,8 +5593,8 @@ const char *settings_menu_children(char group) {
     case 'K': return "w";                          // Speed
     case 'V': return "cv";                         // Commands, Settings
     #ifdef FEATURE_VBAND_LINK
-      case 'v': return SETTINGS_ADAPTER_GROUPS;    // the same lists under each: Rooms, Sound, Display, Device
-      case 'c': return "radh";
+      case 'v': return SETTINGS_ADAPTER_GROUPS;    // the same lists under each: Rooms, Sound, Display, LED, Device
+      case 'c': return "radlh";
     #endif
   }
   return "";
@@ -5598,7 +5612,7 @@ char settings_menu_adapter_kind(char group) {
   if (group == 'c') {return 'a';}
   #ifdef FEATURE_VBAND_LINK
     if (group && strchr(SETTINGS_ADAPTER_GROUPS, group)) {return 's';}
-    if (group && strchr("radh", group)) {return 'a';}
+    if (group && strchr("radlh", group)) {return 'a';}
   #endif
   return 0;
 
@@ -5610,11 +5624,13 @@ char settings_menu_adapter_kind(char group) {
 char settings_adapter_list(byte item) {
 
   // the menu list one of the adapter's items goes in: its group's list under Settings (the group's letter) or
-  // Commands (in lower case), or Settings / Commands themselves
+  // Commands (in lower case), or Settings / Commands themselves. A setting the adapter lists among its commands
+  // comes with its group in lower case.
 
   settings_adapter_item &s = settings_adapter_items[item];
 
   if (s.group == '-') {return (s.type == 'a') ? 'c' : 'v';}
+  if (islower(s.group)) {return s.group;}
   return (s.type == 'a') ? tolower(s.group) : s.group;
 
 }
@@ -5833,25 +5849,50 @@ void settings_menu_close() {
 #ifdef FEATURE_VBAND_LINK
 byte settings_menu_show_answer() {
 
-  // While the adapter's answer to a command shows, until it times out (or nothing comes within 5 s); a paddle
-  // touch cuts it short and isn't taken as a menu move. Returns 1 if the command button was pressed, to leave
-  // command mode.
+  // While the adapter's answer to a command shows, until it times out (or nothing comes within 5 s). If the adapter
+  // offers a command with it ("OF"), "R: <label>" goes on the bottom row and keying R runs that, its answer
+  // following; any other paddle touch cuts the answer short and isn't taken as a menu move. Returns 1 if the command
+  // button was pressed, to leave command mode.
 
   unsigned long asked_time = millis();
   byte answered = 0;
+  byte offer_shown = 0;
+  long cw_char;
+  char word[VBAND_LINK_COMMAND_MAX + 1];
 
   while (1) {
     service_display();                             // outside KEYER_NORMAL this services the link too
     if (lcd_status == LCD_TIMED_MESSAGE) {
       answered = 1;
+      if (settings_adapter_offer[0] && (!offer_shown) && ((long)(lcd_timed_message_clear_time - millis()) > 0)) {
+        lcd_center_print_timed(String("R: ") + settings_adapter_offer_label, LCD_ROWS - 1, lcd_timed_message_clear_time - millis());
+        offer_shown = 1;
+      }
     } else if (answered || ((millis() - asked_time) > 5000)) {
+      settings_adapter_offer[0] = 0;
       return 0;
     }
     if (analogbuttonread(0)) {
       while (analogbuttonread(0)) {}
+      settings_adapter_offer[0] = 0;
       return 1;
     }
     if ((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) {
+      if (settings_adapter_offer[0]) {             // what's keyed: R takes the offer
+        cw_char = get_cw_input_from_user(0);
+        strcpy(word, settings_adapter_offer);
+        settings_adapter_offer[0] = 0;
+        settings_menu_close();
+        if (cw_char == 9) {return 1;}              // the command button
+        if (cw_char == 121) {                      // R
+          vband_link_send_command(word);
+          asked_time = millis();
+          answered = 0;
+          offer_shown = 0;
+          continue;
+        }
+        return 0;
+      }
       while ((paddle_pin_read(paddle_left) == LOW) || (paddle_pin_read(paddle_right) == LOW)) {}
       dit_buffer = 0;
       dah_buffer = 0;
@@ -5868,7 +5909,7 @@ byte settings_menu_show_answer() {
 byte settings_menu_save(char group, settings_menu_row &row, int value) {
 
   #ifdef FEATURE_VBAND_LINK
-    if (settings_menu_adapter_kind(group) == 's') {
+    if (settings_menu_adapter_kind(group)) {       // one of the adapter's settings, in its Settings or Commands lists
       if (!settings_adapter_set(settings_adapter_items[row.item].key, value)) {
         lcd_center_print_timed("VBand no answer", 0, SETTINGS_ANSWER_MS);
         send_char('?', KEYER_NORMAL);
@@ -5983,11 +6024,11 @@ byte settings_menu(char group) {
     switch (cw_char) {
       case 0:                                      // woken without a key: something changed, draw it again
         break;
-      case 1:                                      // E (dit) - down, or lower the value
-      case 2:                                      // T (dah) - up, or raise the value
+      case 1:                                      // E (dit) - down, the next option, or lower the value
+      case 2:                                      // T (dah) - up, the option before, or raise the value
         if (editing) {
-          if (row.type == 'e') {                   // options wrap around
-            edit_value = (edit_value + ((cw_char == 2) ? 1 : row.max) ) % (row.max + 1);
+          if (row.type == 'e') {                   // options go down the list as rows do, and wrap around
+            edit_value = (edit_value + ((cw_char == 1) ? 1 : row.max) ) % (row.max + 1);
           } else {
             edit_value = constrain(edit_value + ((cw_char == 2) ? row.step : -row.step), row.min, row.max);
           }
@@ -6039,6 +6080,7 @@ byte settings_menu(char group) {
         } else if (row.type == 'a') {             // run it, show the answer, then back here
           #ifdef FEATURE_VBAND_LINK
             settings_menu_close();
+            settings_adapter_offer[0] = 0;          // only an offer that comes with this answer
             vband_link_send_command(settings_adapter_items[row.item].key);
             if (settings_menu_show_answer()) {return 1;}
             if (vband_link_up) {settings_adapter_fetch('a');}   // the commands on offer can change (Connect / Disconnect); /OFF: the loop goes back up
