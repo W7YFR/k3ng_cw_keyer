@@ -2182,7 +2182,10 @@ byte send_buffer_status = SERIAL_SEND_BUFFER_NORMAL;
 #ifdef FEATURE_WINKEY_EMULATION
   byte winkey_serial_echo = 1;
   byte winkey_host_open = 0;
-  unsigned int winkey_last_unbuffered_speed_wpm = 0;
+  unsigned int winkey_last_unbuffered_speed_wpm = 0;       // the host's speed (winkey_host_speed()) before a buffered change
+  #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+    unsigned int winkey_host_farnsworth = 0;     // the host's Farnsworth speed while it's off (at or below its speed)
+  #endif
   byte winkey_speed_state = WINKEY_UNBUFFERED_SPEED;
   byte winkey_buffer_counter = 0;
   byte winkey_buffer_pointer = 0;
@@ -8330,8 +8333,8 @@ void check_rotary_encoder(){
     // Start of Winkey Speed change mod for Rotary Encoder -- VE2EVN
     #ifdef FEATURE_WINKEY_EMULATION
       if ((primary_serial_port_mode == SERIAL_WINKEY_EMULATION) && (winkey_host_open)) {
-        winkey_port_write(((configuration.wpm-pot_wpm_low_value)|128),0);
-        winkey_last_unbuffered_speed_wpm = configuration.wpm;
+        winkey_port_write(winkey_speed_report(configuration.wpm),0);
+        winkey_last_unbuffered_speed_wpm = winkey_host_speed();
       }
     #endif
     // End of Winkey Speed change mod for Rotary Encoder -- VE2EVN
@@ -8412,16 +8415,29 @@ void check_potentiometer()
         debug_serial_port->println(analogRead(potentiometer));
       #endif
       #ifdef FEATURE_WINKEY_EMULATION
+        #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+          unsigned int host_speed_before = winkey_host_speed();
+        #endif
         if (keyer_machine_mode == KEYER_COMMAND_MODE) {
           command_speed_set(pot_value_wpm_read);
         } else {
-          if (!winkey_host_open){
+          #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+            // with a host open too, as a WinKeyer's pot does: K3NG's pot only reports and waits for the host to
+            // set the speed, which can't work when the Farnsworth pot sets a speed of its own
             speed_set(pot_value_wpm_read);
-          }
+            winkey_host_farnsworth_follow_keyer();
+          #else
+            if (!winkey_host_open){
+              speed_set(pot_value_wpm_read);
+            }
+          #endif
         }
+        #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+          if (winkey_host_speed() != host_speed_before)   // the host knows only its speed: the character speed alone changing isn't for it
+        #endif
         if ((primary_serial_port_mode == SERIAL_WINKEY_EMULATION) && (winkey_host_open)) {
-          winkey_port_write(((pot_value_wpm_read-pot_wpm_low_value)|128),0);
-          winkey_last_unbuffered_speed_wpm = configuration.wpm;
+          winkey_port_write(winkey_speed_report(pot_value_wpm_read),0);
+          winkey_last_unbuffered_speed_wpm = winkey_host_speed();
         }        
       #else
         if (keyer_machine_mode == KEYER_COMMAND_MODE) {
@@ -8448,9 +8464,19 @@ void check_potentiometer()
           debug_serial_port->print(F(" analog read: "));
           debug_serial_port->println(analogRead(farnsworth_potentiometer));
         #endif
+        #if defined(FEATURE_WINKEY_EMULATION) && defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+          unsigned int host_speed_before = winkey_host_speed();
+        #endif
         configuration.wpm_farnsworth = pot_value_farnsworth_read;
         config_dirty = 1;
         last_pot_farnsworth_read = pot_value_farnsworth_read;
+        #if defined(FEATURE_WINKEY_EMULATION) && defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+          winkey_host_farnsworth_follow_keyer();
+          if ((primary_serial_port_mode == SERIAL_WINKEY_EMULATION) && (winkey_host_open) && (winkey_host_speed() != host_speed_before)) {
+            winkey_port_write(winkey_speed_report(configuration.wpm),0);   // the effective speed: the host's speed
+            winkey_last_unbuffered_speed_wpm = winkey_host_speed();
+          }
+        #endif
         #ifdef FEATURE_DISPLAY
           unsigned int character_wpm, effective_wpm;
           if (!farnsworth_speeds(&character_wpm, &effective_wpm)) {
@@ -9624,8 +9650,7 @@ byte farnsworth_speeds(unsigned int *character_wpm, unsigned int *effective_wpm)
   // the Farnsworth setting a faster character speed. With OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED the speed is the
   // character speed, as the paddles send, and the Farnsworth setting a slower effective speed. Either way, it's off
   // at 0 or on the wrong side of the speed.
-  // Winkey hosts aren't translated yet: their speed and Farnsworth commands set these in K3NG's sense (the Winkey
-  // Farnsworth speed is a character speed), so with the option a host's Farnsworth setting reads the other way.
+  // Winkey hosts mean K1EL's speeds, which are translated where they cross (winkey_set_host_speeds()).
 
   #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
     if ((configuration.wpm_farnsworth == 0) || (configuration.wpm_farnsworth >= configuration.wpm)) {return 0;}
@@ -12340,8 +12365,8 @@ void check_buttons() {
 
             #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_POTENTIOMETER)
               if ((primary_serial_port_mode == SERIAL_WINKEY_EMULATION) && (winkey_host_open)) {
-                winkey_port_write(((configuration.wpm-pot_wpm_low_value)|128),0);
-                winkey_last_unbuffered_speed_wpm = configuration.wpm;
+                winkey_port_write(winkey_speed_report(configuration.wpm),0);
+                winkey_last_unbuffered_speed_wpm = winkey_host_speed();
               }
             #endif
 
@@ -12369,8 +12394,8 @@ void check_buttons() {
 
             #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_POTENTIOMETER)
               if ((primary_serial_port_mode == SERIAL_WINKEY_EMULATION) && (winkey_host_open)) {
-                winkey_port_write(((configuration.wpm-pot_wpm_low_value)|128),0);
-                winkey_last_unbuffered_speed_wpm = configuration.wpm;
+                winkey_port_write(winkey_speed_report(configuration.wpm),0);
+                winkey_last_unbuffered_speed_wpm = winkey_host_speed();
               }
             #endif
           } //if (paddle_pin_read(paddle_right) == LOW) {
@@ -13253,13 +13278,19 @@ void service_send_buffer(byte no_print)
                 #if defined(DEBUG_SERVICE_SEND_BUFFER)
                   debug_serial_port->println("service_send_buffer: winkey_speed_state = WINKEY_BUFFERED_SPEED");
                 #endif
-                winkey_last_unbuffered_speed_wpm = configuration.wpm;
+                winkey_last_unbuffered_speed_wpm = winkey_host_speed();
               }
+            #endif
+            #if defined(FEATURE_WINKEY_EMULATION) && defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+              unsigned int host_farnsworth = winkey_host_farnsworth_speed();   // before the speed changes
             #endif
             configuration.wpm = send_buffer_array[0] * 256;
             remove_from_send_buffer();
             configuration.wpm = configuration.wpm + send_buffer_array[0];
             remove_from_send_buffer();
+            #if defined(FEATURE_WINKEY_EMULATION) && defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+              winkey_set_host_speeds(configuration.wpm, host_farnsworth);   // only Winkey hosts buffer speed changes
+            #endif
 
             #ifdef FEATURE_LED_RING
               update_led_ring();
@@ -13672,6 +13703,78 @@ void add_to_send_buffer(byte incoming_serial_byte)
 //-------------------------------------------------------------------------------------------------------
 
 #ifdef FEATURE_WINKEY_EMULATION
+
+// A Winkey host means K1EL's speeds: its speed is the overall speed, and a Farnsworth speed above it the character
+// speed. With OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED the keyer's speed is the character speed and its Farnsworth
+// speed the overall one, so speeds are translated where they cross: commands coming in, reports going out.
+
+#ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+byte winkey_farnsworth_on() {
+
+  return (configuration.wpm_farnsworth && (configuration.wpm_farnsworth < configuration.wpm));
+
+}
+
+unsigned int winkey_host_farnsworth_speed() {
+
+  // the host's Farnsworth speed: with Farnsworth on, the keyer's (character) speed
+
+  return winkey_farnsworth_on() ? configuration.wpm : winkey_host_farnsworth;
+
+}
+
+void winkey_host_farnsworth_follow_keyer() {
+
+  // the keyer's own pots changed its speeds: the host's Farnsworth speed is now the keyer's character speed, or off
+
+  winkey_host_farnsworth = winkey_farnsworth_on() ? configuration.wpm : 0;
+
+}
+
+void winkey_set_host_speeds(unsigned int speed, unsigned int farnsworth) {
+
+  // a host's speed and Farnsworth speed: Farnsworth above the speed sends characters at it, overall at the speed
+
+  winkey_host_farnsworth = farnsworth;
+  if (farnsworth > speed) {
+    configuration.wpm = farnsworth;
+    configuration.wpm_farnsworth = speed;
+  } else {
+    configuration.wpm = speed;
+    if (configuration.wpm_farnsworth < speed) {    // the host has Farnsworth off; at or above the speed it's off
+      configuration.wpm_farnsworth = 0;            // anyway, and the keyer's own setting (its pot, say) is kept
+    }
+  }
+
+}
+#endif //OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+
+unsigned int winkey_host_speed() {
+
+  // the speed as a host means it: the overall speed
+
+  #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+    if (winkey_farnsworth_on()) {return configuration.wpm_farnsworth;}
+  #endif
+  return configuration.wpm;
+
+}
+
+byte winkey_speed_report(unsigned int wpm) {
+
+  // a speed pot report of wpm; with Farnsworth on (OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED) the pot is the character
+  // speed, the host's Farnsworth, so the report keeps the host's speed
+
+  #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+    if (winkey_farnsworth_on()) {wpm = configuration.wpm_farnsworth;}
+  #endif
+  // kept in the six bits a report has: below the pot's range the byte would read as a status byte (0b11xxxxxx)
+  if (wpm < pot_wpm_low_value) {wpm = pot_wpm_low_value;}
+  if (wpm > (unsigned int)(pot_wpm_low_value + 63)) {wpm = pot_wpm_low_value + 63;}
+  return ((wpm - pot_wpm_low_value) | 128);
+
+}
+
 void winkey_unbuffered_speed_command(byte incoming_serial_byte) {
 
   if (incoming_serial_byte == 0) {
@@ -13679,9 +13782,13 @@ void winkey_unbuffered_speed_command(byte incoming_serial_byte) {
       configuration.pot_activated = 1;
     #endif
   } else {
-    configuration.wpm = incoming_serial_byte;
+    #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+      winkey_set_host_speeds(incoming_serial_byte, winkey_host_farnsworth_speed());
+    #else
+      configuration.wpm = incoming_serial_byte;
+    #endif
     winkey_speed_state = WINKEY_UNBUFFERED_SPEED;
-    winkey_last_unbuffered_speed_wpm = configuration.wpm;
+    winkey_last_unbuffered_speed_wpm = incoming_serial_byte;
     //calculate_element_length();
     #ifdef OPTION_WINKEY_STRICT_EEPROM_WRITES_MAY_WEAR_OUT_EEPROM
       config_dirty = 1;
@@ -13700,7 +13807,11 @@ void winkey_unbuffered_speed_command(byte incoming_serial_byte) {
 #ifdef FEATURE_WINKEY_EMULATION
 void winkey_farnsworth_command(byte incoming_serial_byte) {
 
-  #ifdef FEATURE_FARNSWORTH
+  #if defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+    if ((incoming_serial_byte == 0) || ((incoming_serial_byte > 9) && (incoming_serial_byte < 100))) {   // 0: off
+      winkey_set_host_speeds(winkey_host_speed(), incoming_serial_byte);
+    }
+  #elif defined(FEATURE_FARNSWORTH)
     if ((incoming_serial_byte > 9) && (incoming_serial_byte < 100)) {
       configuration.wpm_farnsworth = incoming_serial_byte;
     }
@@ -14162,10 +14273,10 @@ void winkey_admin_get_values_command() {
   winkey_port_write(byte_to_send,1);
 
   // 2 - speed
-  if (configuration.wpm > 99) {
+  if (winkey_host_speed() > 99) {
     winkey_port_write(99,1);
   } else {
-    byte_to_send = configuration.wpm;
+    byte_to_send = winkey_host_speed();
     winkey_port_write(byte_to_send,1);
   }
 
@@ -14223,7 +14334,9 @@ void winkey_admin_get_values_command() {
   winkey_port_write(configuration.keying_compensation,1);
 
   // 11 - farnsworth wpm
-  #ifdef FEATURE_FARNSWORTH
+  #if defined(OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED)
+    winkey_port_write(winkey_host_farnsworth_speed(),1);
+  #elif defined(FEATURE_FARNSWORTH)
     winkey_port_write(configuration.wpm_farnsworth,1);
   #else
     winkey_port_write(zero,1);
@@ -14401,7 +14514,7 @@ void winkey_eeprom_download() {
   winkey_port_write(0xA5,1); // 01 magic byte
   winkey_admin_get_values_command(); // 02-16
 
-  winkey_port_write(byte(configuration.wpm),1); // 17 cmdwpm
+  winkey_port_write(byte(winkey_host_speed()),1); // 17 cmdwpm
   bytes_sent = 17;
 
   //pad the rest with zeros
@@ -14504,7 +14617,7 @@ void service_winkey(byte action) {
 
   if (action == WINKEY_HOUSEKEEPING) {
     if (winkey_last_unbuffered_speed_wpm == 0) {
-      winkey_last_unbuffered_speed_wpm = configuration.wpm;
+      winkey_last_unbuffered_speed_wpm = winkey_host_speed();
     }
 
     // Winkey interface emulation housekeeping items
@@ -14724,9 +14837,9 @@ void service_winkey(byte action) {
             break;
           case 0x07:
             #ifdef FEATURE_POTENTIOMETER
-              winkey_port_write(((pot_value_wpm()-pot_wpm_low_value)|128),0);
+              winkey_port_write(winkey_speed_report(pot_value_wpm()),0);
             #else
-              winkey_port_write((byte(configuration.wpm-pot_wpm_low_value)|128),0);
+              winkey_port_write(winkey_speed_report(configuration.wpm),0);
             #endif
             #ifdef DEBUG_WINKEY
               debug_serial_port->println("service_winkey:report pot");
@@ -14769,7 +14882,11 @@ void service_winkey(byte action) {
             manual_ptt_invoke = 0;
             tx_and_sidetone_key(0);
             winkey_speed_state = WINKEY_UNBUFFERED_SPEED;
-            configuration.wpm = winkey_last_unbuffered_speed_wpm;
+            #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+              winkey_set_host_speeds(winkey_last_unbuffered_speed_wpm, winkey_host_farnsworth_speed());
+            #else
+              configuration.wpm = winkey_last_unbuffered_speed_wpm;
+            #endif
             #ifdef DEBUG_WINKEY
               debug_serial_port->print("service_winkey:0A clearbuff send_buffer_bytes:");
               debug_serial_port->println(send_buffer_bytes);
@@ -15036,8 +15153,12 @@ void service_winkey(byte action) {
             configuration.pot_activated = 1;
           #endif
         } else {
-          configuration.wpm = ((incoming_serial_byte*100)/5);
-          winkey_last_unbuffered_speed_wpm = configuration.wpm;
+          #ifdef OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED
+            winkey_set_host_speeds((incoming_serial_byte*100)/5, winkey_host_farnsworth_speed());
+          #else
+            configuration.wpm = ((incoming_serial_byte*100)/5);
+          #endif
+          winkey_last_unbuffered_speed_wpm = winkey_host_speed();
           #ifdef OPTION_WINKEY_STRICT_EEPROM_WRITES_MAY_WEAR_OUT_EEPROM
             config_dirty = 1;
           #endif
@@ -24600,7 +24721,7 @@ void myControlChange(byte channel, byte control, byte value) {
     case OPTION_MIDI_WPM_CONTROL:
       speed_set(value);
       #ifdef FEATURE_WINKEY_EMULATION
-        winkey_port_write(((value - pot_wpm_low_value)|128),0);
+        winkey_port_write(winkey_speed_report(value),0);
       #endif
       break;
     case OPTION_MIDI_REVERSE_CONTROL:
