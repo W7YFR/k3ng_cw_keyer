@@ -95,6 +95,10 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   the name; it stands in for the space before the value, so no value gets shorter.
 - Only on `w7yfr` (`9ba5316`): Device > Dit mash in the menu chooses what a run of dits does: Menu (open the settings menu),
   Clear (clear the display) or Off. Saved with paddle echo in the spare EEPROM byte; `/KY MASH`, `ky.mash`.
+- `feature/settings-menu`: a list shows when anything under it does (one holding only another list no longer
+  vanishes); keyed shortcut answers read "Name: value" like the menu.
+- Only on `w7yfr` (`ed77945`): Dit mash is a list: Command (Menu, Clear, Off) and Qty, how many dits make the run (6-12,
+  default 10, in place of `dit_hold_reset_count`); `/KY DITS`, `ky.dits`.
 - Only on `w7yfr` (`d55352e`): holding the dit paddle for 10 dits opens the settings menu (command mode with the menu
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
