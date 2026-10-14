@@ -2663,6 +2663,12 @@ void setup()
     initialize_serial_ports();
   #endif
   check_eeprom_for_initialization();
+  #ifdef FEATURE_POTENTIOMETER
+    // the speed pot's position, not the saved speed (read above it, by initialize_potentiometer()), if it's in use
+    if ((configuration.pot_activated || potentiometer_always_on) && !((potentiometer_enable_pin) && (digitalRead(potentiometer_enable_pin) == HIGH))) {
+      configuration.wpm = last_pot_wpm_read;
+    }
+  #endif
   #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
     configuration.wpm_farnsworth = last_pot_farnsworth_read;   // the pot's position, not the saved setting
   #endif
@@ -8404,7 +8410,7 @@ byte pot_value_farnsworth()
 byte pot_value_wpm()
 {
 
-  static int last_pot_read = 0;
+  static int last_pot_read = -1000;   // the first call always reads the pot (from 0, a pot at the bottom gave 0 wpm)
   static byte return_value = 0;
   int pot_read = analogRead(potentiometer);
   if (abs(pot_read - last_pot_read) > potentiometer_reading_threshold ) {
