@@ -12,44 +12,12 @@ Each fix and feature is on its own branch, cut from upstream `master` (or stacke
 behind its own `FEATURE_` / `OPTION_` define where it adds behavior. Merge or cherry-pick the branch you want; you
 don't need anything else from this fork.
 
-`w7yfr` is this build's own branch: every branch below merged together, plus this build's configuration (pins,
+`w7yfr` is this build's own branch: every branch in [UPSTREAM.md](UPSTREAM.md) merged together (a few as copies), plus this build's configuration (pins,
 which features are on) and a few changes made directly on it. Don't merge `w7yfr` itself unless you want this exact
 build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 
-| Branch | Based on | What it adds |
-|---|---|---|
-| `fix/oled-nonblocking-redraw` | `master` | Display redraws no longer block paddle handling |
-| `feature/oled-font-select` | `fix/oled-nonblocking-redraw` | Selectable SSD1306 font |
-| `fix/i2c-wire-timeout` | `fix/oled-nonblocking-redraw` | A stuck I2C bus no longer freezes the keyer |
-| `feature/vband-link` | `feature/oled-font-select` | `FEATURE_VBAND_LINK`: the link to the ESP32 VBand adapter |
-| `feature/settings-menu` | `feature/vband-link` | `FEATURE_SETTINGS_MENU`: settings menu, shortcuts and CLI |
-| `feature/display-msg-delay-setting` | `master` | `default_display_msg_delay` can be set in a settings file |
-| `feature/build-revision` | `master` | `FIRMWARE_GIT_REV`: the startup screen shows the commit a build came from |
-| `fix/async-eeprom-write-overrun` | `master` | The background settings write no longer writes one byte past the settings |
-| `fix/straight-key-echo-without-cli` | `master` | Straight key echo to the display builds without the CLI |
-| `fix/prosign-sos-and-warnings` | `master` | SOS decodes to its letters; paddle reads always return; compiler warnings |
-| `fix/exclamation-mark` | `master` | `!` sent and decoded as `-.-.--` |
-| `fix/punctuation-decode` | `fix/exclamation-mark` | `;` `$` `'` `"` `_` `)` decode from the paddles |
-| `feature/extra-button` | `master` | `EXTRA_BUTTONS`: buttons beyond the command and memory buttons |
-| `feature/button-press-duration` | `master` | `button_hold_threshold_ms`: press vs hold on the buttons |
-| `feature/oled-screen-controls` | `master` | SSD1306 display controls, scroll reset |
-| `feature/memory-tweaks` | `master` | Memory recording and playback improvements |
-| `feature/clear-display-after-memory` | `feature/memory-tweaks` + `feature/oled-screen-controls` | Clear the display after a memory plays |
-| `feature/dit-hold-clear-reset` | `feature/memory-tweaks` + `feature/oled-screen-controls` | `FEATURE_DIT_HOLD_RESET`: clear or reset with a run of dits |
-| `feature/paddle-echo-practice` | `master` | Echo practice from the paddles, no serial terminal |
-| `fix/echo-practice` | `master` | `%` sent and tracked in echo practice |
-| `feature/straight-key-paddle` | `master` | `FEATURE_STRAIGHT_KEY_PADDLE`: the dit paddle as a straight key |
-| `feature/farnsworth-potentiometer` | `master` | `FEATURE_FARNSWORTH_POTENTIOMETER`: a pot for the Farnsworth speed |
-| `feature/farnsworth-effective-speed` | `feature/farnsworth-potentiometer` | `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED`: the speed is the character speed, Farnsworth the effective speed |
-| `feature/winkey-farnsworth` | `feature/farnsworth-effective-speed` | Winkey hosts' speed and Farnsworth translated under `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED` |
-| `feature/usb-port-mode` | `feature/settings-menu` | Device > USB port: CLI or Winkey, saved, switched without a power cycle |
-| `fix/speed-pot-at-startup` | `master` | The speed pot's position sets the speed at power-on |
-| `fix/farnsworth-pot-at-startup` | `feature/farnsworth-potentiometer` | The Farnsworth pot's position sets the Farnsworth speed at power-on |
-| `fix/power-on-serial-button` | `master` | The command button held at power-on picks the other USB port mode again |
-| `fix/prosign-forward-declaration` | `master` | Builds outside the Arduino IDE (`convert_prosign`) |
-| `fix/platformio-forward-declarations` | `fix/prosign-forward-declaration` | More functions declared ahead, so other boards' profiles build outside the Arduino IDE |
-| `build/platformio` | `master` | PlatformIO builds |
-| `chore/build-warnings` | `master` | Compiler warning cleanup |
+[UPSTREAM.md](UPSTREAM.md) lists the branches: what each is cut from, whether it's in `w7yfr`, and how ready it is to
+offer upstream.
 
 Below, newest first, each entry names its branch. Dates are when the work was merged into `w7yfr`.
 
