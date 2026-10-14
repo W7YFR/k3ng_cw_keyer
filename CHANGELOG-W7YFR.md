@@ -41,6 +41,11 @@ build; the "only on `w7yfr`" entries list commit hashes to cherry-pick instead.
 | `feature/straight-key-paddle` | `master` | `FEATURE_STRAIGHT_KEY_PADDLE`: the dit paddle as a straight key |
 | `feature/farnsworth-potentiometer` | `master` | `FEATURE_FARNSWORTH_POTENTIOMETER`: a pot for the Farnsworth speed |
 | `feature/farnsworth-effective-speed` | `feature/farnsworth-potentiometer` | `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED`: the speed is the character speed, Farnsworth the effective speed |
+| `feature/winkey-farnsworth` | `feature/farnsworth-effective-speed` | Winkey hosts' speed and Farnsworth translated under `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED` |
+| `feature/usb-port-mode` | `feature/settings-menu` | Device > USB port: CLI or Winkey, saved, switched without a power cycle |
+| `fix/speed-pot-at-startup` | `master` | The speed pot's position sets the speed at power-on |
+| `fix/farnsworth-pot-at-startup` | `feature/farnsworth-potentiometer` | The Farnsworth pot's position sets the Farnsworth speed at power-on |
+| `fix/power-on-serial-button` | `master` | The command button held at power-on picks the other USB port mode again |
 | `fix/prosign-forward-declaration` | `master` | Builds outside the Arduino IDE (`convert_prosign`) |
 | `fix/platformio-forward-declarations` | `fix/prosign-forward-declaration` | More functions declared ahead, so other boards' profiles build outside the Arduino IDE |
 | `build/platformio` | `master` | PlatformIO builds |
@@ -51,6 +56,30 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 ## Unreleased
 
 ### Added
+- `feature/usb-port-mode`: a USB port setting, CLI or Winkey (Device > USB port, `/KY USB WINKEY`,
+  `\$ ky.usb winkey`), in builds with both `FEATURE_WINKEY_EMULATION` and `FEATURE_COMMAND_LINE_INTERFACE`.
+  Changing it switches the port straight away: from the menu at once, from the CLI once its answer is out (at the
+  old baud rate). Leaving Winkey mode stops a host's message and closes its session. It's saved (the top two bits of
+  the extras byte after the configuration) and decides the mode at power-on; until it's first saved,
+  `OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION` decides, as before. The command button held at power-on
+  still gives the other mode for that session. The branch adds the Device list to the menu's top level (the
+  `w7yfr` build already has it, for Dit mash). Only on `w7yfr` (`b505cf1`): Winkey emulation enabled, and
+  `OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION` off, so the port starts as the CLI until set to Winkey.
+- `feature/winkey-farnsworth`: with `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED`, Winkey hosts' speeds are translated.
+  A host means K1EL's speeds (its speed overall, a Farnsworth speed above it the character speed); the keyer keeps
+  the character speed as its speed and the overall speed as Farnsworth. A host's "speed 10, Farnsworth 25" now sends
+  characters at 25 and overall at 10, and get values reads back what the host set. Covered: unbuffered and buffered
+  speed (and cancelling or clearing back to it), Farnsworth (0 turns it off), HSCW, load defaults, get values, the
+  EEPROM download and every speed report. A host knows one speed, the overall speed, so that's what reports
+  carry. With the option, both pots set the keyer's speeds while a host is open too, as a WinKeyer's pot does (the
+  speed pot the character speed, the Farnsworth pot the overall speed), and the host is told the overall speed
+  whenever it changes; a host's own speed commands apply until a pot moves. K3NG's speed pot only reported while a
+  host was open and waited for the host to set the speed, which broke with the Farnsworth pot setting a speed of its
+  own. Reports are kept within the pot's range (a speed below it read as a status byte). The host's Farnsworth speed
+  is kept while it's at or below the speed, so lowering the speed below it turns Farnsworth back on, as on a
+  WinKeyer, and a host's speed with Farnsworth off leaves the keyer's own Farnsworth setting alone when it's at or
+  above that speed (off anyway). Without the option nothing changes, except that speed reports are kept within
+  the pot's range.
 - `feature/vband-link`: the adapter's log on the keyer's USB port. With the adapter's `vb.log` on, each line it sends
   (`LG` / `LGP` frames) is printed with an `ESP> ` prefix, in any mode. Never waits on the port (a line that doesn't
   fit is dropped), and nothing is printed while the port is in Winkey mode.
@@ -73,8 +102,8 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   its pot) a slower effective speed that memories and buffered sending stretch their spacing to; it's off at 0 or at
   or above the speed. Without the option, K3NG's way is unchanged (`farnsworth_speeds()` gives its answer). The CLI,
   help, web page and pot message name the speeds to match, and the pot shows "Farnsworth off" when it has no effect.
-  The option is listed, off, in every `keyer_features_and_options` file. Known gap: Winkey hosts aren't translated
-  yet, so with the option a host's Farnsworth setting reads the other way (see the roadmap). Only on `w7yfr`
+  The option is listed, off, in every `keyer_features_and_options` file. Winkey hosts are translated on
+  `feature/winkey-farnsworth`. Only on `w7yfr`
   (`168aca8`): enabled.
 - `feature/build-revision`: a build given `-D FIRMWARE_GIT_REV=<commit>` shows it on the startup screen in place of
   `CODE_VERSION` ("V: 4f3f238", with `+` for uncommitted changes) and after `CODE_VERSION` in the serial boot
@@ -103,6 +132,17 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
 ### Fixed
+- `fix/speed-pot-at-startup`: at power-on the speed is the speed pot's position (when the pot is in use). The pot
+  was read before the saved settings were, so the keyer started at the saved speed and ignored the pot until it was
+  turned. The pot's first reading also always reads it: from a static 0, a pot at the bottom read as 0 wpm.
+  Upstream `master` has the same bug.
+- `fix/farnsworth-pot-at-startup`: at power-on the Farnsworth speed is the Farnsworth pot's position. The pot was
+  read before the saved settings were, so the saved Farnsworth speed replaced it, and the pot counted as already
+  applied, so it had no effect until turned. Found through Winkey testing: a host connecting resets the Mega, and
+  read back the saved speed instead of the pot's.
+- `fix/power-on-serial-button`: holding the command button at power-on picks the other USB port mode (CLI or
+  Winkey) again. `initialize_serial_ports()` read the button before `initialize_analog_button_array()` had set up
+  the ladder, so the press was never seen; the ladder is now set up first. Upstream `master` has the same bug.
 - `feature/settings-menu`: in command mode, the adapter's connecting screen kept up: a Connect from the menu froze
   its clock and missed the screen that ends it.
 - `feature/vband-link`: command mode notices the adapter going (its goodbye, or the link timeout) instead of only
