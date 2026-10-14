@@ -2004,6 +2004,13 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte *settings_keyer_mode = &configuration.keyer_mode;   // command mode points this at the mode it restores on exit
   byte settings_menu_wake = 0;                      // 1 while the menu waits for a key, 2 once it has something new to show
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
+  #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+    #define SETTINGS_USB_PORT_SAVE_UNSET 3          // the USB port setting as saved (SETTINGS_EXTRA_USB_PORT_BITS): never,
+    #define SETTINGS_USB_PORT_SAVE_CLI 2            // CLI,
+    #define SETTINGS_USB_PORT_SAVE_WINKEY 1         // or Winkey
+    byte settings_usb_port_saved = SETTINGS_USB_PORT_SAVE_UNSET;
+    byte settings_usb_port_switch = 0;              // 1 + the mode to switch the USB port to, once the answer's out
+  #endif
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
     #define SETTINGS_ADAPTER_GROUPS "RADLH"        // the lists under VBand's Settings and Commands: Rooms, Sound, Display, LED, Device
@@ -2687,6 +2694,10 @@ void loop()
     #endif
 
     check_for_dirty_configuration();
+
+    #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+      service_usb_port_switch();
+    #endif
 
     #ifdef FEATURE_DEAD_OP_WATCHDOG
       check_for_dead_op();
@@ -4785,6 +4796,9 @@ const settings_keyer_item settings_keyer_items[] PROGMEM = {   // read with sett
   #ifdef FEATURE_MEMORIES
     {'K', 'T', "RPT",   "Mem repeat",  'n', 0, 9900, 100, 'm'},
   #endif
+  #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+    {'K', 'E', "USB",   "USB port",    'e', 0, 0, 1, 0},
+  #endif
   {'S', 'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
   {'S', 'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
 };
@@ -4808,6 +4822,8 @@ const char settings_keyer_mode_words[][4] PROGMEM = {"A", "B", "ULT", "BUG", "SG
 const byte settings_sidetone_modes[] = {SIDETONE_ON, SIDETONE_OFF, SIDETONE_PADDLE_ONLY};
 const char settings_sidetone_mode_names[][7] PROGMEM = {"On", "Off", "Paddle"};
 const char settings_sidetone_mode_words[][4] PROGMEM = {"ON", "OFF", "PDL"};
+const char settings_usb_port_names[][7] PROGMEM = {"CLI", "Winkey"};          // SERIAL_CLI, SERIAL_WINKEY_EMULATION
+const char settings_usb_port_words[][7] PROGMEM = {"CLI", "WINKEY"};
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -4870,6 +4886,7 @@ const char *settings_group_name(char group) {
     case 'w': return "Speed";
     case 'S': return "Sidetone";
     case 'T': return "Transmit";
+    case 'E': return "Device";
     case 'V': return "VBand";
     case 'v': return "VBand Settings";
     case 'c': return "VBand Commands";
@@ -4916,12 +4933,13 @@ byte settings_tx_list(byte *txs) {
 
 char settings_enum_kind(byte item) {
 
-  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter
+  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter, 'U' the USB port's mode
 
   settings_keyer_item s;
 
   settings_keyer_load(item, s);
   if (s.group == 'S') {return 'S';}
+  if (!strcmp(s.key, "USB")) {return 'U';}
   return strcmp(s.key, "TX") ? 'M' : 'T';
 
 }
@@ -4935,6 +4953,7 @@ byte settings_enum_count(byte item) {
   switch (settings_enum_kind(item)) {
     case 'M': return sizeof(settings_keyer_modes);
     case 'S': return sizeof(settings_sidetone_modes);
+    case 'U': return 2;
   }
   return settings_tx_list(txs);
 
@@ -4955,6 +4974,9 @@ String settings_enum_text(byte item, byte option, byte word) {
     case 'S':
       if (word) {return String((const __FlashStringHelper *)settings_sidetone_mode_words[option]);}
       return String((const __FlashStringHelper *)settings_sidetone_mode_names[option]);
+    case 'U':
+      if (word) {return String((const __FlashStringHelper *)settings_usb_port_words[option]);}
+      return String((const __FlashStringHelper *)settings_usb_port_names[option]);
   }
   settings_tx_list(txs);
   return String(word ? "" : "TX ") + txs[option];
@@ -4982,6 +5004,11 @@ int settings_keyer_get(byte item) {
           if (settings_sidetone_modes[x] == configuration.sidetone_mode) {return x;}
         }
         return 0;
+      #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+        case 'U':
+          if (settings_usb_port_switch) {return settings_usb_port_switch - 1;}   // the CLI's answer, just before it
+          return primary_serial_port_mode;         // this session's: the command button at power-on can differ from the setting
+      #endif
     }
     count = settings_tx_list(txs);
     for (byte x = 0; x < count; x++) {
@@ -5031,6 +5058,16 @@ void settings_keyer_set(byte item, int value) {
       case 'S':
         configuration.sidetone_mode = settings_sidetone_modes[value];
         break;
+      #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+        case 'U':
+          settings_usb_port_saved = value ? SETTINGS_USB_PORT_SAVE_WINKEY : SETTINGS_USB_PORT_SAVE_CLI;
+          settings_save_extras();
+          settings_usb_port_switch = 1 + value;
+          if (keyer_machine_mode != KEYER_NORMAL) {    // the menu: now; the CLI: once its answer is out (loop())
+            service_usb_port_switch();
+          }
+          return;                                  // not part of K3NG's configuration
+      #endif
       default:
         settings_tx_list(txs);
         switch_to_tx_silent(txs[value]);
@@ -5411,7 +5448,7 @@ const char *settings_menu_children(char group) {
   // the lists a menu list opens, in order, above its own rows
 
   switch (group) {
-    case 0:   return "VKST";                       // VBand, Keying, Sidetone, Transmit
+    case 0:   return "VKSTE";                      // VBand, Keying, Sidetone, Transmit, Device
     case 'K': return "w";                          // Speed
     case 'V': return "cv";                         // Commands, Settings
     #ifdef FEATURE_VBAND_LINK
@@ -6268,6 +6305,8 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
   // the configuration in RAM (fixed on fix/async-eeprom-write-overrun).
   #define SETTINGS_EXTRAS_ADDRESS (sizeof(configuration) + 2)
   #define SETTINGS_EXTRA_NO_PADDLE_ECHO 0x01
+  #define SETTINGS_EXTRA_USB_PORT_SHIFT 6         // two bits: SETTINGS_USB_PORT_SAVE_*, so 0xFF means never set
+  #define SETTINGS_EXTRA_USB_PORT_BITS 0xC0
 #endif
 
 void settings_save_extras() {
@@ -6276,6 +6315,10 @@ void settings_save_extras() {
     byte extras = 0xFF;
     #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
       if (!lcd_paddle_echo) {extras &= ~SETTINGS_EXTRA_NO_PADDLE_ECHO;}
+    #endif
+    #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+      extras &= ~SETTINGS_EXTRA_USB_PORT_BITS;
+      extras |= (settings_usb_port_saved << SETTINGS_EXTRA_USB_PORT_SHIFT) & SETTINGS_EXTRA_USB_PORT_BITS;
     #endif
     EEPROM.update(SETTINGS_EXTRAS_ADDRESS, extras);
   #endif
@@ -6294,6 +6337,54 @@ void initialize_settings_menu() {
   #endif
 
 }
+
+//-------------------------------------------------------------------------------------------------------
+
+#if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
+byte settings_usb_port_winkey(byte winkey) {
+
+  // whether the USB port starts in Winkey mode: the USB port setting once it's been saved, else winkey (the
+  // OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION default). Called before initialize_settings_menu().
+
+  #if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
+    settings_usb_port_saved = (EEPROM.read(SETTINGS_EXTRAS_ADDRESS) & SETTINGS_EXTRA_USB_PORT_BITS) >> SETTINGS_EXTRA_USB_PORT_SHIFT;
+    if (settings_usb_port_saved == SETTINGS_USB_PORT_SAVE_WINKEY) {return 1;}
+    if (settings_usb_port_saved == SETTINGS_USB_PORT_SAVE_CLI) {return 0;}
+    settings_usb_port_saved = SETTINGS_USB_PORT_SAVE_UNSET;
+  #endif
+  return winkey;
+
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+void service_usb_port_switch() {
+
+  // the USB port setting changed: end the port, and open it again in the new mode at that mode's baud rate
+
+  #ifdef FEATURE_SETTINGS_MENU
+    if (!settings_usb_port_switch) {return;}
+    byte mode = settings_usb_port_switch - 1;
+    settings_usb_port_switch = 0;
+    if (mode == primary_serial_port_mode) {return;}
+
+    primary_serial_port->flush();                  // the CLI's answer goes out at the old rate
+    if (primary_serial_port_mode == SERIAL_WINKEY_EMULATION) {
+      if (winkey_sending) {                        // a host's message: stop it, as its clear buffer command would
+        clear_send_buffer();
+        winkey_sending = 0;
+      }
+      winkey_host_open = 0;                        // and close its session, as a host close does
+      manual_ptt_invoke = 0;
+    }
+    primary_serial_port->end();
+    primary_serial_port_mode = mode;
+    primary_serial_port_baud_rate = (mode == SERIAL_WINKEY_EMULATION) ? WINKEY_DEFAULT_BAUD : PRIMARY_SERIAL_PORT_BAUD;
+    primary_serial_port->begin(primary_serial_port_baud_rate);
+  #endif
+
+}
+#endif
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -21018,34 +21109,26 @@ void initialize_serial_ports(){
 
     #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE) //--------------------------------------------
 
+      // the USB port setting (OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION until it's been saved), and the
+      // command button held at power-on for the other mode, for this session
+      #ifdef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
+        byte winkey = settings_usb_port_winkey(1);
+      #else
+        byte winkey = settings_usb_port_winkey(0);
+      #endif
       #ifdef FEATURE_BUTTONS
         if (analogbuttonread(0)) {
-          #ifdef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
-            primary_serial_port_mode = SERIAL_CLI;
-            primary_serial_port_baud_rate = PRIMARY_SERIAL_PORT_BAUD;
-          #else
-            primary_serial_port_mode = SERIAL_WINKEY_EMULATION;
-            primary_serial_port_baud_rate = WINKEY_DEFAULT_BAUD;
-          #endif  //ifndef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
-        } else {
-          #ifdef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
-            primary_serial_port_mode = SERIAL_WINKEY_EMULATION;
-            primary_serial_port_baud_rate = WINKEY_DEFAULT_BAUD;
-          #else
-            primary_serial_port_mode = SERIAL_CLI;
-            primary_serial_port_baud_rate = PRIMARY_SERIAL_PORT_BAUD;
-          #endif  //ifndef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
+          winkey = !winkey;
         }
         while (analogbuttonread(0)) {}
-      #else //FEATURE_BUTTONS
-        #ifdef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
-          primary_serial_port_mode = SERIAL_WINKEY_EMULATION;
-          primary_serial_port_baud_rate = WINKEY_DEFAULT_BAUD;
-        #else
-          primary_serial_port_mode = SERIAL_CLI;
-          primary_serial_port_baud_rate = PRIMARY_SERIAL_PORT_BAUD;
-        #endif  //ifndef OPTION_PRIMARY_SERIAL_PORT_DEFAULT_WINKEY_EMULATION
       #endif //FEATURE_BUTTONS
+      if (winkey) {
+        primary_serial_port_mode = SERIAL_WINKEY_EMULATION;
+        primary_serial_port_baud_rate = WINKEY_DEFAULT_BAUD;
+      } else {
+        primary_serial_port_mode = SERIAL_CLI;
+        primary_serial_port_baud_rate = PRIMARY_SERIAL_PORT_BAUD;
+      }
     #endif //defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)---------------------------------
 
     #if !defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
