@@ -2075,6 +2075,10 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte *settings_keyer_mode = &configuration.keyer_mode;   // command mode points this at the mode it restores on exit
   byte settings_menu_wake = 0;                      // 1 while the menu waits for a key, 2 once it has something new to show
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
+  #define SETTINGS_DIT_MASH_MENU 0                  // what a run of dits (FEATURE_DIT_HOLD_RESET) does: open the menu,
+  #define SETTINGS_DIT_MASH_CLEAR 1                 // clear the display,
+  #define SETTINGS_DIT_MASH_OFF 2                   // or nothing
+  byte settings_dit_mash = SETTINGS_DIT_MASH_MENU;
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
     #define SETTINGS_ADAPTER_GROUPS "RADLH"        // the lists under VBand's Settings and Commands: Rooms, Sound, Display, LED, Device
@@ -2785,7 +2789,12 @@ void loop()
         if (dit_hold_gesture_flag) {
           dit_hold_gesture_flag = 0;
           #ifdef FEATURE_SETTINGS_MENU
-            settings_menu_open();                  // a run of dits opens the settings menu (the extra button clears the display)
+            if (settings_dit_mash == SETTINGS_DIT_MASH_MENU) {   // the Dit mash setting (the extra button clears the display)
+              settings_menu_open();
+            } else if (settings_dit_mash == SETTINGS_DIT_MASH_CLEAR) {
+              lcd_clear();
+              display_scroll_reset();
+            }
           #else
             lcd_clear();
             display_scroll_reset();
@@ -5061,6 +5070,9 @@ const settings_keyer_item settings_keyer_items[] PROGMEM = {   // read with sett
   #ifdef FEATURE_MEMORIES
     {'K', 'T', "RPT",   "Mem repeat",  'n', 0, 9900, 100, 'm'},
   #endif
+  #if defined(FEATURE_DIT_HOLD_RESET) && defined(FEATURE_DISPLAY)
+    {'K', 'E', "MASH",  "Dit mash",    'e', 0, 0, 1, 0},
+  #endif
   {'S', 'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
   {'S', 'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
 };
@@ -5084,6 +5096,8 @@ const char settings_keyer_mode_words[][4] PROGMEM = {"A", "B", "ULT", "BUG", "SG
 const byte settings_sidetone_modes[] = {SIDETONE_ON, SIDETONE_OFF, SIDETONE_PADDLE_ONLY};
 const char settings_sidetone_mode_names[][7] PROGMEM = {"On", "Off", "Paddle"};
 const char settings_sidetone_mode_words[][4] PROGMEM = {"ON", "OFF", "PDL"};
+const char settings_dit_mash_names[][6] PROGMEM = {"Menu", "Clear", "Off"};   // SETTINGS_DIT_MASH_* order
+const char settings_dit_mash_words[][5] PROGMEM = {"MENU", "CLR", "OFF"};
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -5146,6 +5160,7 @@ const char *settings_group_name(char group) {
     case 'w': return "Speed";
     case 'S': return "Sidetone";
     case 'T': return "Transmit";
+    case 'E': return "Device";
     case 'V': return "VBand";
     case 'v': return "VBand Settings";
     case 'c': return "VBand Commands";
@@ -5192,12 +5207,13 @@ byte settings_tx_list(byte *txs) {
 
 char settings_enum_kind(byte item) {
 
-  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter
+  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter, 'D' what a run of dits does
 
   settings_keyer_item s;
 
   settings_keyer_load(item, s);
   if (s.group == 'S') {return 'S';}
+  if (!strcmp(s.key, "MASH")) {return 'D';}
   return strcmp(s.key, "TX") ? 'M' : 'T';
 
 }
@@ -5211,6 +5227,7 @@ byte settings_enum_count(byte item) {
   switch (settings_enum_kind(item)) {
     case 'M': return sizeof(settings_keyer_modes);
     case 'S': return sizeof(settings_sidetone_modes);
+    case 'D': return SETTINGS_DIT_MASH_OFF + 1;
   }
   return settings_tx_list(txs);
 
@@ -5231,6 +5248,9 @@ String settings_enum_text(byte item, byte option, byte word) {
     case 'S':
       if (word) {return String((const __FlashStringHelper *)settings_sidetone_mode_words[option]);}
       return String((const __FlashStringHelper *)settings_sidetone_mode_names[option]);
+    case 'D':
+      if (word) {return String((const __FlashStringHelper *)settings_dit_mash_words[option]);}
+      return String((const __FlashStringHelper *)settings_dit_mash_names[option]);
   }
   settings_tx_list(txs);
   return String(word ? "" : "TX ") + txs[option];
@@ -5258,6 +5278,8 @@ int settings_keyer_get(byte item) {
           if (settings_sidetone_modes[x] == configuration.sidetone_mode) {return x;}
         }
         return 0;
+      case 'D':
+        return settings_dit_mash;
     }
     count = settings_tx_list(txs);
     for (byte x = 0; x < count; x++) {
@@ -5307,6 +5329,10 @@ void settings_keyer_set(byte item, int value) {
       case 'S':
         configuration.sidetone_mode = settings_sidetone_modes[value];
         break;
+      case 'D':
+        settings_dit_mash = value;
+        settings_save_extras();
+        return;                                    // not part of K3NG's configuration
       default:
         settings_tx_list(txs);
         switch_to_tx_silent(txs[value]);
@@ -5687,7 +5713,7 @@ const char *settings_menu_children(char group) {
   // the lists a menu list opens, in order, above its own rows
 
   switch (group) {
-    case 0:   return "VKST";                       // VBand, Keying, Sidetone, Transmit
+    case 0:   return "VKSTE";                      // VBand, Keying, Sidetone, Transmit, Device
     case 'K': return "w";                          // Speed
     case 'V': return "cv";                         // Commands, Settings
     #ifdef FEATURE_VBAND_LINK
@@ -6541,6 +6567,8 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
   // the configuration in RAM (fixed on fix/async-eeprom-write-overrun).
   #define SETTINGS_EXTRAS_ADDRESS (sizeof(configuration) + 2)
   #define SETTINGS_EXTRA_NO_PADDLE_ECHO 0x01
+  #define SETTINGS_EXTRA_DIT_MASH_SHIFT 1         // two bits: SETTINGS_DIT_MASH_OFF - settings_dit_mash, so 0xFF means the menu
+  #define SETTINGS_EXTRA_DIT_MASH_BITS 0x06
 #endif
 
 void settings_save_extras() {
@@ -6550,6 +6578,8 @@ void settings_save_extras() {
     #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
       if (!lcd_paddle_echo) {extras &= ~SETTINGS_EXTRA_NO_PADDLE_ECHO;}
     #endif
+    extras &= ~SETTINGS_EXTRA_DIT_MASH_BITS;
+    extras |= ((SETTINGS_DIT_MASH_OFF - settings_dit_mash) << SETTINGS_EXTRA_DIT_MASH_SHIFT) & SETTINGS_EXTRA_DIT_MASH_BITS;
     EEPROM.update(SETTINGS_EXTRAS_ADDRESS, extras);
   #endif
 
@@ -6560,10 +6590,12 @@ void settings_save_extras() {
 void initialize_settings_menu() {
 
   #if defined(FEATURE_SETTINGS_MENU) && defined(__AVR__)
+    byte extras = EEPROM.read(SETTINGS_EXTRAS_ADDRESS);
+    byte mash = (extras & SETTINGS_EXTRA_DIT_MASH_BITS) >> SETTINGS_EXTRA_DIT_MASH_SHIFT;
     #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
-      byte extras = EEPROM.read(SETTINGS_EXTRAS_ADDRESS);
       lcd_paddle_echo = (extras & SETTINGS_EXTRA_NO_PADDLE_ECHO) ? 1 : 0;   // the bit is cleared to turn echo off
     #endif
+    settings_dit_mash = (mash <= SETTINGS_DIT_MASH_OFF) ? (SETTINGS_DIT_MASH_OFF - mash) : SETTINGS_DIT_MASH_MENU;
   #endif
 
 }
