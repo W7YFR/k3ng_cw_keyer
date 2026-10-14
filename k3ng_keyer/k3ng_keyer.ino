@@ -2455,6 +2455,7 @@ void setup()
   initialize_default_modes();
   initialize_watchdog();
   initialize_ethernet_variables();
+  initialize_analog_button_array();   // before the serial port, which reads the command button held at power-on
   #if defined(DEBUG_EEPROM_READ_SETTINGS)
     initialize_serial_ports();
   #endif
@@ -2464,7 +2465,6 @@ void setup()
   #if !defined(DEBUG_EEPROM_READ_SETTINGS)
     initialize_serial_ports();
   #endif
-  initialize_analog_button_array();
   initialize_ps2_keyboard();
   initialize_usb();
   initialize_cw_keyboard();
