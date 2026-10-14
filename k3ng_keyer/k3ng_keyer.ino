@@ -2079,6 +2079,12 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   #define SETTINGS_DIT_MASH_CLEAR 1                 // clear the display,
   #define SETTINGS_DIT_MASH_OFF 2                   // or nothing
   byte settings_dit_mash = SETTINGS_DIT_MASH_MENU;
+  #ifdef FEATURE_DIT_HOLD_RESET
+    #define SETTINGS_DIT_MASH_COUNT_MIN 6
+    #define SETTINGS_DIT_MASH_COUNT_MAX 12
+    byte settings_dit_mash_count = dit_hold_reset_count;   // how many dits make the run: the Dit mash Qty setting
+    #define DIT_HOLD_COUNT settings_dit_mash_count
+  #endif
   #ifdef FEATURE_VBAND_LINK
     #define SETTINGS_ADAPTER_MAX 16
     #define SETTINGS_ADAPTER_GROUPS "RADLH"        // the lists under VBand's Settings and Commands: Rooms, Sound, Display, LED, Device
@@ -2259,6 +2265,9 @@ byte send_buffer_status = SERIAL_SEND_BUFFER_NORMAL;
 #ifdef FEATURE_DIT_HOLD_RESET
   byte dit_hold_counter = 0;      // consecutive dits sent so far in the current hold
   byte dit_hold_gesture_flag = 0; // set on release if dit_hold_counter reached dit_hold_reset_count; cleared by whichever code consumes it
+  #ifndef DIT_HOLD_COUNT
+    #define DIT_HOLD_COUNT dit_hold_reset_count   // with the settings menu, its Dit mash Qty setting instead
+  #endif
 #endif //FEATURE_DIT_HOLD_RESET
 
 #ifdef FEATURE_BUTTONS
@@ -5071,7 +5080,8 @@ const settings_keyer_item settings_keyer_items[] PROGMEM = {   // read with sett
     {'K', 'T', "RPT",   "Mem repeat",  'n', 0, 9900, 100, 'm'},
   #endif
   #if defined(FEATURE_DIT_HOLD_RESET) && defined(FEATURE_DISPLAY)
-    {'K', 'E', "MASH",  "Dit mash",    'e', 0, 0, 1, 0},
+    {'K', 'm', "MASH",  "Command",     'e', 0, 0, 1, 0},
+    {'K', 'm', "DITS",  "Qty",         'n', SETTINGS_DIT_MASH_COUNT_MIN, SETTINGS_DIT_MASH_COUNT_MAX, 1, 0},
   #endif
   {'S', 'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
   {'S', 'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
@@ -5161,6 +5171,7 @@ const char *settings_group_name(char group) {
     case 'S': return "Sidetone";
     case 'T': return "Transmit";
     case 'E': return "Device";
+    case 'm': return "Dit mash";
     case 'V': return "VBand";
     case 'v': return "VBand Settings";
     case 'c': return "VBand Commands";
@@ -5304,6 +5315,9 @@ int settings_keyer_get(byte item) {
   if (!strcmp(s.key, "LEAD")) {return configuration.ptt_lead_time[configuration.current_tx - 1];}
   if (!strcmp(s.key, "TAIL")) {return configuration.ptt_tail_time[configuration.current_tx - 1];}
   if (!strcmp(s.key, "HZ")) {return configuration.hz_sidetone;}
+  #if defined(FEATURE_DIT_HOLD_RESET) && defined(FEATURE_DISPLAY)
+    if (!strcmp(s.key, "DITS")) {return settings_dit_mash_count;}
+  #endif
   return 0;
 
 }
@@ -5357,6 +5371,13 @@ void settings_keyer_set(byte item, int value) {
   #if defined(FEATURE_DISPLAY) && defined(FEATURE_PADDLE_ECHO)
     if (!strcmp(s.key, "ECHO")) {
       lcd_paddle_echo = value;
+      settings_save_extras();
+      return;                                      // not part of K3NG's configuration
+    }
+  #endif
+  #if defined(FEATURE_DIT_HOLD_RESET) && defined(FEATURE_DISPLAY)
+    if (!strcmp(s.key, "DITS")) {
+      settings_dit_mash_count = value;
       settings_save_extras();
       return;                                      // not part of K3NG's configuration
     }
@@ -5716,6 +5737,7 @@ const char *settings_menu_children(char group) {
     case 0:   return "VKSTE";                      // VBand, Keying, Sidetone, Transmit, Device
     case 'K': return "w";                          // Speed
     case 'V': return "cv";                         // Commands, Settings
+    case 'E': return "m";                          // Dit mash
     #ifdef FEATURE_VBAND_LINK
       case 'v': return SETTINGS_ADAPTER_GROUPS;    // the same lists under each: Rooms, Sound, Display, LED, Device
       case 'c': return "radlh";
@@ -6063,6 +6085,7 @@ char settings_menu_parent(char group) {
 
   if ((group == 'v') || (group == 'c')) {return 'V';}
   if (group == 'w') {return 'K';}
+  if (group == 'm') {return 'E';}
   switch (settings_menu_adapter_kind(group)) {     // the lists under VBand's Settings and Commands
     case 's': return 'v';
     case 'a': return 'c';
@@ -6572,6 +6595,8 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
   #define SETTINGS_EXTRA_NO_PADDLE_ECHO 0x01
   #define SETTINGS_EXTRA_DIT_MASH_SHIFT 1         // two bits: SETTINGS_DIT_MASH_OFF - settings_dit_mash, so 0xFF means the menu
   #define SETTINGS_EXTRA_DIT_MASH_BITS 0x06
+  #define SETTINGS_EXTRA_DIT_COUNT_SHIFT 3        // three bits: the count less 6, except 7 (0xFF, never written) is 10
+  #define SETTINGS_EXTRA_DIT_COUNT_BITS 0x38
 #endif
 
 void settings_save_extras() {
@@ -6583,6 +6608,10 @@ void settings_save_extras() {
     #endif
     extras &= ~SETTINGS_EXTRA_DIT_MASH_BITS;
     extras |= ((SETTINGS_DIT_MASH_OFF - settings_dit_mash) << SETTINGS_EXTRA_DIT_MASH_SHIFT) & SETTINGS_EXTRA_DIT_MASH_BITS;
+    #ifdef FEATURE_DIT_HOLD_RESET
+      extras &= ~SETTINGS_EXTRA_DIT_COUNT_BITS;
+      extras |= (((settings_dit_mash_count == 10) ? 7 : (settings_dit_mash_count - SETTINGS_DIT_MASH_COUNT_MIN)) << SETTINGS_EXTRA_DIT_COUNT_SHIFT) & SETTINGS_EXTRA_DIT_COUNT_BITS;
+    #endif
     EEPROM.update(SETTINGS_EXTRAS_ADDRESS, extras);
   #endif
 
@@ -6599,6 +6628,10 @@ void initialize_settings_menu() {
       lcd_paddle_echo = (extras & SETTINGS_EXTRA_NO_PADDLE_ECHO) ? 1 : 0;   // the bit is cleared to turn echo off
     #endif
     settings_dit_mash = (mash <= SETTINGS_DIT_MASH_OFF) ? (SETTINGS_DIT_MASH_OFF - mash) : SETTINGS_DIT_MASH_MENU;
+    #ifdef FEATURE_DIT_HOLD_RESET
+      byte count = (extras & SETTINGS_EXTRA_DIT_COUNT_BITS) >> SETTINGS_EXTRA_DIT_COUNT_SHIFT;
+      settings_dit_mash_count = (count == 7) ? 10 : (SETTINGS_DIT_MASH_COUNT_MIN + count);
+    #endif
   #endif
 
 }
@@ -9405,7 +9438,7 @@ void check_dit_paddle()
   }
   #ifdef FEATURE_DIT_HOLD_RESET
     else {   // dit paddle is up
-      if (dit_hold_counter >= dit_hold_reset_count) {
+      if (dit_hold_counter >= DIT_HOLD_COUNT) {
         dit_hold_gesture_flag = 1;
         // no real character is this many dits in a row - discard it instead of letting it decode to '*'
         #ifdef FEATURE_PADDLE_ECHO
