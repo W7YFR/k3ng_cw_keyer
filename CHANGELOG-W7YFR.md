@@ -91,6 +91,10 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   here) above the lists Rooms, Sound, Display and Device, which hold the rest; a list shows only when it has
   something in it, and back returns to your row at every depth. Link protocol 2 (the adapter's `SI` items carry the
   list they go in): update the adapter with it.
+- `feature/settings-menu`: a colon after each setting's name ("Mode: Iambic B"), so a word value can't read as part of
+  the name; it stands in for the space before the value, so no value gets shorter.
+- Only on `w7yfr` (`9ba5316`): Device > Dit mash in the menu chooses what a run of dits does: Menu (open the settings menu),
+  Clear (clear the display) or Off. Saved with paddle echo in the spare EEPROM byte; `/KY MASH`, `ky.mash`.
 - Only on `w7yfr` (`d55352e`): holding the dit paddle for 10 dits opens the settings menu (command mode with the menu
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
