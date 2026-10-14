@@ -5374,7 +5374,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
           return 0;
         }
       }
-      text = String(s.label) + " " + settings_value_text(s.type, s.value, settings_adapter_unit(item), -1);
+      text = String(s.label) + ": " + settings_value_text(s.type, s.value, settings_adapter_unit(item), -1);
       return 1;
     }
   #endif //FEATURE_VBAND_LINK
@@ -5393,7 +5393,7 @@ byte settings_apply(char group, const char *key, const char *value_token, String
     }
     settings_keyer_set(item, value);
   }
-  text = String(s.label) + " " + settings_value_text(s.type, settings_keyer_get(item), settings_keyer_unit(s.unit), item);
+  text = String(s.label) + ": " + settings_value_text(s.type, settings_keyer_get(item), settings_keyer_unit(s.unit), item);
   return 1;
 
 }
@@ -5462,7 +5462,7 @@ char settings_adapter_list(byte item) {
 
 byte settings_menu_child_shown(char child) {
 
-  // VBand while the adapter is there; any other list when it has something in it
+  // VBand while the adapter is there; any other list when it has something in it, or opens a list that does
 
   if (child == 'V') {
     #ifdef FEATURE_VBAND_LINK
@@ -5482,6 +5482,9 @@ byte settings_menu_child_shown(char child) {
   #endif
   for (byte x = 0; x < SETTINGS_KEYER_COUNT; x++) {
     if (settings_keyer_menu(x) == child) {return 1;}
+  }
+  for (const char *grandchild = settings_menu_children(child); *grandchild; grandchild++) {
+    if (settings_menu_child_shown(*grandchild)) {return 1;}
   }
   return 0;
 
