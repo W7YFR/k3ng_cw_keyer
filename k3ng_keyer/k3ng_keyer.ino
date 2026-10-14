@@ -5640,10 +5640,17 @@ void settings_menu_draw(char group, byte cursor, byte &top, byte editing, int ed
       line.concat(row.label);
       value = settings_value_text(row.type, (editing && ((top + x) == cursor)) ? edit_value : row.value, row.unit,
                                   settings_menu_adapter_kind(group) ? -1 : row.item);
-      if (row.type == 'g') {value = ">";}          // opens a list
-      if ((row.type == 'k') || (row.type == 'x')) {value = "";}
-      if ((line.length() + 1 + value.length()) > LCD_COLUMNS) {        // a long name: as much as fits
-        value = value.substring(0, (LCD_COLUMNS > (line.length() + 1)) ? (LCD_COLUMNS - line.length() - 1) : 0);
+      byte gap = 1;                                // a space before the value; a setting's colon does instead
+      if (row.type == 'g') {                       // opens a list
+        value = ">";
+      } else if ((row.type == 'k') || (row.type == 'x') || (row.type == 'a')) {
+        value = "";
+      } else {                                     // a setting: "Name:", so its value reads as one
+        line.concat(':');
+        gap = 0;
+      }
+      if ((line.length() + gap + value.length()) > LCD_COLUMNS) {      // a long name: as much as fits
+        value = value.substring(0, (LCD_COLUMNS > (line.length() + gap)) ? (LCD_COLUMNS - line.length() - gap) : 0);
       }
       while ((line.length() + value.length()) < LCD_COLUMNS) {line.concat(' ');}
       line.concat(value);
