@@ -2663,6 +2663,9 @@ void setup()
     initialize_serial_ports();
   #endif
   check_eeprom_for_initialization();
+  #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
+    configuration.wpm_farnsworth = last_pot_farnsworth_read;   // the pot's position, not the saved setting
+  #endif
   check_for_beacon_mode();
   check_for_debug_modes();
   #if !defined(DEBUG_EEPROM_READ_SETTINGS)
@@ -8383,7 +8386,7 @@ void check_potentiometer()
 byte pot_value_farnsworth()
 {
 
-  static int last_pot_read = 0;
+  static int last_pot_read = -1000;   // the first call always reads the pot
   static byte return_value = 0;
   int pot_read = analogRead(farnsworth_potentiometer);
   if (abs(pot_read - last_pot_read) > potentiometer_reading_threshold ) {
@@ -21571,8 +21574,7 @@ void initialize_potentiometer(){
 
   #ifdef FEATURE_FARNSWORTH_POTENTIOMETER
     pinMode(farnsworth_potentiometer,INPUT);
-    last_pot_farnsworth_read = pot_value_farnsworth();
-    configuration.wpm_farnsworth = last_pot_farnsworth_read;
+    last_pot_farnsworth_read = pot_value_farnsworth();   // setup() sets the Farnsworth speed from it once the settings are read
   #endif
 
 }
