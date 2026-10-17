@@ -2005,14 +2005,14 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte settings_menu_wake = 0;                      // 1 while the menu waits for a key, 2 once it has something new to show
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
   #ifdef FEATURE_VBAND_LINK
-    #define SETTINGS_ADAPTER_MAX 16
+    #define SETTINGS_ADAPTER_MAX 20                 // the most of one half of its list (settings, or commands) we keep; past it, items are dropped
     #define SETTINGS_ADAPTER_GROUPS "RADLH"        // the lists under VBand's Settings and Commands: Rooms, Sound, Display, LED, Device
     #define SETTINGS_ADAPTER_TEXTS 2                // text settings (name, room); an item's value is its slot here
     #define SETTINGS_TEXT_MAX 32
     settings_adapter_item settings_adapter_items[SETTINGS_ADAPTER_MAX];
     char settings_adapter_texts[SETTINGS_ADAPTER_TEXTS][SETTINGS_TEXT_MAX + 1];
     byte settings_adapter_text_count = 0;
-    #define SETTINGS_ADAPTER_OPTION_LISTS 4         // settings with a list of options; an item's step is its slot here
+    #define SETTINGS_ADAPTER_OPTION_LISTS 6         // settings with a list of options; an item's step is its slot here
     #define SETTINGS_OPTIONS_MAX 27
     char settings_adapter_options[SETTINGS_ADAPTER_OPTION_LISTS][SETTINGS_OPTIONS_MAX + 1];   // names, |-separated
     byte settings_adapter_option_count = 0;
