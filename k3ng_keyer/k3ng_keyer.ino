@@ -1990,6 +1990,8 @@ uint16_t memory_area_end = 0;
 
 #ifdef FEATURE_VBAND_LINK
   #define VBAND_LINK_MAX_FRAME 64
+  #define VBAND_LINK_CLI_LOG 0                      // what the adapter prints on our USB port: its log
+  #define VBAND_LINK_CLI_TRANSCRIPT 1               // or the VBand transcript
   // Version of the link's messages, sent in HI by both sides; each warns on the display when the other's
   // differs, so flashing only one board after a breaking change says so. Bump it only for changes the other side
   // can't cope with (a changed message format) - new message types don't need it, since both sides ignore types
@@ -2026,6 +2028,7 @@ uint16_t memory_area_end = 0;
   #define VBAND_LINK_COMMAND_MAX 8
   unsigned long vband_link_answer_until = 0;        // command mode shows the adapter's status screens until then: its answer to a command
   byte vband_link_version_checked = 0;              // since the link last came up
+  byte vband_link_transcript = 0;                   // the adapter is streaming its transcript to our USB port ("UI,1")
   char vband_link_command_reply = 0;                // the adapter's "CR" answer to "CK": '1' known command, '0' not
   #ifdef FEATURE_DISPLAY
     unsigned long vband_link_status_clear_time = 0;  // when the adapter's last status screen times out, while it's showing
@@ -2118,6 +2121,12 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   #define VBAND_LINK_MY_SENDING() vband_link_set_speaker(vband_link_my_tag)   // our own sending is about to be echoed on the display
 #else
   #define VBAND_LINK_MY_SENDING()
+#endif
+
+#if defined(FEATURE_VBAND_LINK)
+  #define VBAND_LINK_TRANSCRIPT_HAS_SENDING() (vband_link_ready && vband_link_transcript)   // the adapter's transcript prints our own sending on the USB port, so the CLI doesn't echo it
+#else
+  #define VBAND_LINK_TRANSCRIPT_HAS_SENDING() 0
 #endif
 
 #ifdef DEBUG_VARIABLE_DUMP
@@ -4580,6 +4589,7 @@ void vband_link_set_up(byte up) {
     vband_link_set_ready(0);                       // an adapter we can't hear can't be keying VBand
     vband_link_up = 0;
     vband_link_version_checked = 0;                // whatever comes back may have been reflashed
+    vband_link_transcript = 0;
     vband_link_enable_tx(0);
   }
 
@@ -4603,7 +4613,13 @@ void vband_link_handle_frame() {
   if (fields) {*fields++ = 0;} else {fields = star;}
 
   if ((strcmp(vband_link_rx_frame, "LG") == 0) || (strcmp(vband_link_rx_frame, "LGP") == 0)) {   // the adapter's log, in any mode
-    vband_link_print_log(fields, vband_link_rx_frame[2] == 0);
+    vband_link_print_cli(fields, vband_link_rx_frame[2] == 0, VBAND_LINK_CLI_LOG);
+  }
+  if ((strcmp(vband_link_rx_frame, "TR") == 0) || (strcmp(vband_link_rx_frame, "TRP") == 0)) {   // the VBand transcript, in any mode
+    vband_link_print_cli(fields, vband_link_rx_frame[2] == 0, VBAND_LINK_CLI_TRANSCRIPT);
+  }
+  if (strcmp(vband_link_rx_frame, "UI") == 0) {    // "UI,1" / "UI,0": the transcript is streaming or not
+    vband_link_transcript = (fields[0] == '1');
   }
 
   #ifdef FEATURE_SETTINGS_MENU
@@ -4679,24 +4695,33 @@ void vband_link_handle_frame() {
 
 //-------------------------------------------------------------------------------------------------------
 
-void vband_link_print_log(const char *text, byte line_ends) {
+void vband_link_print_cli(const char *text, byte line_ends, byte stream) {
 
-  // "LG,<text>" ends a line of the adapter's log, "LGP,<text>" is part of a longer one. Printed on our USB port, so
-  // the adapter's log (its VB.LOG setting turns it on) can be read without reaching the adapter's own port. Never
-  // waits: a part that doesn't fit in the serial buffer is dropped, so keying timing isn't disturbed.
+  // Text from the adapter for our USB port, a line or part of one: its log ("LG,<text>" ends a line, "LGP,<text>"
+  // is part of a longer one; its VB.LOG setting turns it on), so it can be read without reaching the adapter's own
+  // port, and the VBand transcript ("TR" / "TRP"; VB.UI turns it on). Log lines start "ESP> ". When one stream's
+  // line is cut into by the other's, it's ended first. Never waits: a part that doesn't fit in the serial buffer is
+  // dropped, so keying timing isn't disturbed.
 
   #if defined(FEATURE_SERIAL)
     static byte at_line_start = 1;
+    static byte line_stream = VBAND_LINK_CLI_LOG;  // whose line is unfinished, while !at_line_start
 
     if (primary_serial_port_mode != SERIAL_CLI) {return;}   // Winkey: the host isn't expecting text
-    if (primary_serial_port->availableForWrite() < (int)(strlen(text) + 7)) {
+    if (primary_serial_port->availableForWrite() < (int)(strlen(text) + 9)) {
       at_line_start = line_ends;
+      line_stream = stream;
       return;
     }
-    if (at_line_start) {primary_serial_port->print(F("ESP> "));}
+    if ((!at_line_start) && (line_stream != stream)) {
+      primary_serial_port->println();
+      at_line_start = 1;
+    }
+    if (at_line_start && (stream == VBAND_LINK_CLI_LOG)) {primary_serial_port->print(F("ESP> "));}
     primary_serial_port->print(text);
     if (line_ends) {primary_serial_port->println();}
     at_line_start = line_ends;
+    line_stream = stream;
   #endif
 
 }
@@ -17226,7 +17251,7 @@ void service_paddle_echo()
     #if defined(FEATURE_SERIAL) && defined(FEATURE_COMMAND_LINE_INTERFACE)
       #if defined(OPTION_PROSIGN_SUPPORT)
         byte_temp = convert_cw_number_to_ascii(paddle_echo_buffer);
-        if (cli_paddle_echo){
+        if (cli_paddle_echo && !VBAND_LINK_TRANSCRIPT_HAS_SENDING()){
           if ((byte_temp > PROSIGN_START) && (byte_temp < PROSIGN_END)){
             primary_serial_port->print(prosign_temp[0]);
             primary_serial_port->print(prosign_temp[1]);
@@ -17261,7 +17286,7 @@ void service_paddle_echo()
         }
 
       #else  // ! OPTION_PROSIGN_SUPPORT
-        if (cli_paddle_echo){
+        if (cli_paddle_echo && !VBAND_LINK_TRANSCRIPT_HAS_SENDING()){
           if (configuration.cli_mode == CLI_MILL_MODE_KEYBOARD_RECEIVE){
             primary_serial_port->println();
             primary_serial_port->println();
@@ -17310,7 +17335,7 @@ void service_paddle_echo()
     #endif //FEATURE_DISPLAY
 
     #if defined(FEATURE_SERIAL) && defined(FEATURE_COMMAND_LINE_INTERFACE)
-       if (cli_paddle_echo){
+       if (cli_paddle_echo && !VBAND_LINK_TRANSCRIPT_HAS_SENDING()){
          primary_serial_port->write(" ");
 
         #ifdef FEATURE_COMMAND_LINE_INTERFACE_ON_SECONDARY_PORT
