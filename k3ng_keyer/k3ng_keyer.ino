@@ -75,7 +75,6 @@ English code training word lists from gen_cw_words.pl by Andy Stewart, KB1OIQ
     \.     Toggle dit buffer on/off
     \-     Toggle dah buffer on/off
     \~     Reset unit
-    \;     Toggle cw send echo
     \{     QLF mode on/off
     \>     Send serial number, then increment
     \<     Send current serial number
@@ -90,7 +89,7 @@ English code training word lists from gen_cw_words.pl by Andy Stewart, KB1OIQ
     \_     Beacon Mode at Boot Up Enable / Disable (requires FEATURE_BEACON_SETTING)
     \;     CW Send Inhibit Enable / Disable
     \\     Immediately clear the buffer, stop memory sending, etc.
-    \:     Extended CLLI commands
+    \:     Extended CLI commands
             eepromdump              - do a byte dump of EEPROM for troubleshooting
             saveeeprom <filename>   - store EEPROM in a file
             loadeeprom <filename>   - load into EEPROM from a file
@@ -1417,6 +1416,16 @@ Recent Update History
     2024.03.20.2239
       tx_inhibit: unkey PTT when tx_inhibit goes active
 
+    2026.10.16.0811
+      Fixed stale \: CLI help text (was still describing the old "Toggle cw send echo" command
+        that moved to \; years ago) and a "CLLI" typo in the Extended CLI Commands help text
+      Fixed HARDWARE_IZ3GME comment in keyer_hardware.h naming the wrong settings file
+      Extended OPTION_DIRECT_PADDLE_PIN_READS_MEGA's direct register-read switch in
+        paddle_pin_read() to cover pins 2-13, not just the default 2 and 5
+      Fixed command_weighting_adjust() never setting config_dirty, so paddle-based weighting
+        adjustments were silently lost on reboot instead of being saved to EEPROM; also added
+        live "Weighting NN" display feedback during the adjustment
+
   qwerty
 
   Documentation: https://github.com/k3ng/k3ng_cw_keyer/wiki
@@ -1447,7 +1456,7 @@ If you offer a hardware kit using this software, show your appreciation by sendi
 */
 
 
-#define CODE_VERSION "2024.03.20.2239"
+#define CODE_VERSION "2026.10.16.0811"
 
 // A build can name the commit it was built from with -D FIRMWARE_GIT_REV=<commit> (for example from
 // `git describe --always --dirty=+`): the startup screen then shows it in place of CODE_VERSION, and the serial
@@ -11868,10 +11877,16 @@ void command_weighting_adjust() {
     if (paddle_pin_read(paddle_left) == LOW) {
       configuration.weighting = configuration.weighting + 1;
       if (configuration.weighting > 90){configuration.weighting = 90;}
+      #ifdef FEATURE_DISPLAY
+        lcd_center_print_timed("Weighting " + String(configuration.weighting), 1, default_display_msg_delay);
+      #endif
     }
     if (paddle_pin_read(paddle_right) == LOW) {
       configuration.weighting = configuration.weighting - 1;
       if (configuration.weighting < 10){configuration.weighting = 10;}
+      #ifdef FEATURE_DISPLAY
+        lcd_center_print_timed("Weighting " + String(configuration.weighting), 1, default_display_msg_delay);
+      #endif
     }
     while ((paddle_pin_read(paddle_left) == LOW && paddle_pin_read(paddle_right) == LOW) || (analogbuttonread(0))) { // if paddles are squeezed or button0 pressed - exit
       looping = 0;
@@ -11885,6 +11900,7 @@ void command_weighting_adjust() {
   while (paddle_pin_read(paddle_left) == LOW || paddle_pin_read(paddle_right) == LOW || analogbuttonread(0) ) {}  // wait for all lines to go high
   dit_buffer = 0;
   dah_buffer = 0;
+  config_dirty = 1;
 }
 #endif //FEATURE_COMMAND_MODE
 
@@ -16027,7 +16043,7 @@ void print_serial_help(PRIMARY_SERIAL_CLS * port_to_use,byte paged_help){
   port_to_use->println(F("\\.\t\t: Toggle dit buffer on/off"));
   port_to_use->println(F("\\-\t\t: Toggle dah buffer on/off"));
   port_to_use->println(F("\\~\t\t: Reset unit")); //Added missing command(WD9DMP)
-  port_to_use->println(F("\\:\t\t: Toggle cw send echo")); //Added missing command(WD9DMP)
+  port_to_use->println(F("\\;\t\t: CW Send Inhibit Enable / Disable"));
   port_to_use->println(F("\\{\t\t: QLF mode on/off")); //Added missing command(WD9DMP)
   port_to_use->println(F("\\>\t\t: Send serial number, then increment")); //Added missing command(WD9DMP)
   port_to_use->println(F("\\<\t\t: Send current serial number")); //Added missing command(WD9DMP)
@@ -16077,7 +16093,7 @@ void print_serial_help(PRIMARY_SERIAL_CLS * port_to_use,byte paged_help){
 
   #if !defined(OPTION_EXCLUDE_EXTENDED_CLI_COMMANDS)
     if (paged_help) {serial_page_pause(port_to_use,10);}
-    port_to_use->println(F("\r\n\\:\tExtended CLLI commands"));
+    port_to_use->println(F("\r\n\\:\tExtended CLI commands"));
     port_to_use->println(F("\t\teepromdump\t\t- do a byte dump of EEPROM for troubleshooting"));
     port_to_use->println(F("\t\tsaveeeprom <filename>\t- store EEPROM in a file"));
     port_to_use->println(F("\t\tloadeeprom <filename> \t- load into EEPROM from a file"));
@@ -16646,6 +16662,37 @@ Finally, with a burst of ingenuity, Colin spots an opportunity to outmaneuver hi
 Breathless and shaken, Colin watches in relief as the car speeds off. With a shaky sigh of relief, he takes a moment to collect himself before cautiously continuing on his way home, acutely aware of the danger lurking.
 
 As Colin arrives home, he resolves to uncover the truth behind the mysterious car chase and its connection to the secrets he's stumbled upon. Little does he know that his journey is far from over, and the dangers he faces are only just beginning.
+
+*/
+
+
+/*
+
+Chapter Four
+
+Colin pulled into his driveway, cut the engine, and sat motionless for a long moment, watching the street behind him in the rearview mirror until he was satisfied nothing had followed him the last mile.  His hands were still trembling as he carried the taped box and the carton of books inside, setting them down in the garage rather than the house, telling himself it was only to keep the clutter away from the kids, though he knew that wasn't the real reason.
+
+He waited until after dinner, after the kids were in bed, before bringing the box down to his basement radio room.  His wife had texted that her flight back from visiting her sister would be delayed until Monday, which gave him the house, and the evening, to himself.  He locked the basement door, something he had never done before in the fifteen years they'd lived there.
+
+The duct tape peeled back easily, as if it had been resealed more than once.  Inside, nested in foam and old newspaper, was one of Walter's silver boxes, smaller than a cigar box, with a toggle switch, a single LED, and a nine-pin connector Colin didn't immediately recognize.  Underneath it, wrapped in a handkerchief, was a spiral notebook, its pages brittle and yellowed, filled with Walter's cramped handwriting; columns of numbers, what looked like sine waves sketched in pencil, and, near the back, a hand-drawn tree of sixteen-character strings branching off from each other like a family tree.
+
+Colin found his own string near one of the outermost branches, and traced the line back, generation by generation, until it converged with a string circled twice in red ink near the center of the page.  Above it, in block letters, Walter had written a single word:  ORIGIN.
+
+He spent two hours with the electronics textbook, matching the pencil notes in the margins against the notebook, piecing together enough of the scheme to recognize it was not quite what Walter had described at the coffee shop; or rather, it was that, but underneath, layered deeper, there was something else, an older system, slower, built from vacuum-tube-era thinking rather than modern digital signal processing.  Colin realized with a start that Walter hadn't just updated an existing encryption scheme.  He had built it, decades earlier, from scratch, likely during his years at Bell Labs, and had spent the rest of his life quietly modernizing it so a new generation could carry it forward, undetected, in the noise.
+
+A little after midnight, with the notebook open on his desk and his coffee gone cold, Colin connected the silver box to his receiver the way the diagrams in the notebook suggested, improvising with alligator clips where the old connector didn't match anything in his junk box.  He powered up his microcontroller rig alongside it, tuned to 80 meters, and waited.
+
+For almost an hour, nothing came but ordinary static and a late-night ragchew between two old-timers discussing a lawnmower repair.  Colin's eyes grew heavy.  Just as he reached to shut everything down for the night, the band erupted in a burst that was unmistakably different from atmospheric noise, structured, rhythmic, almost musical in its cadence.  His microcontroller terminal filled with characters:
+
+8^fGwq9(:lLDPu6$ : WALTER IS GONE.  THE ORIGIN STREAM IS UNGUARDED.  OTHERS KNOW THIS.  THEY WILL COME FOR THE BOX.  DO NOT TRUST THE MAN IN THE GRAY SEDAN.  HE WAS PURGED IN '94.  GUARD THE NOTEBOOK.  MORE TO FOLLOW.
+
+Colin stared at the screen, his pulse suddenly loud in his ears.  A gray sedan.  He hadn't gotten a good look at the car that had chased him from the yard sale, hadn't even been certain of the color in the fading afternoon light, but he was fairly sure, now that he thought back on it, that it had been gray.
+
+He killed the lights in the basement and climbed the stairs two at a time, checking the lock on the front door, then the back, then standing at the front window for a long while, watching the empty street.  Nothing moved except a neighbor's cat crossing under a streetlamp.  Colin told himself he was being paranoid, that a man who had spent an evening reading a dead stranger's margin notes had no business feeling like a character in a spy novel.
+
+But as he finally climbed into bed, exhausted and wired at the same time, he couldn't shake the feeling that somewhere out there, someone purged from the network decades ago was no longer content to stay hidden in the noise, and that the box now sitting in his basement, and the sixteen characters he had memorized at a coffee shop, had made him a target in a war he didn't yet understand the rules of.
+
+He didn't sleep much that night.  Every car that passed on the street below sounded, to his ears, like it was slowing down.
 
 */
 
@@ -23403,9 +23450,19 @@ int paddle_pin_read(int pin_to_read){
     #ifndef OPTION_INVERT_PADDLE_PIN_LOGIC
       #ifdef OPTION_DIRECT_PADDLE_PIN_READS_MEGA              // after April 2019, if this option is not defined then a direct read of the pins can never occur
         switch(pin_to_read) {
-          case 2: return(bitRead(PINE, 4)); break;
-          case 5: return(bitRead(PINE, 3)); break;
-        }                                                     // end switch
+          case 2:  return(bitRead(PINE, 4)); break;           // pins 2 and 5 are the default paddle pins and are placed at the top
+          case 5:  return(bitRead(PINE, 3)); break;           // as the greatest liklihood is that they will be examined first and then we exit
+          case 3:  return(bitRead(PINE, 5)); break;           // this should cover cases where board makers are not using the generic pins 2 and 5 for paddle connections
+          case 4:  return(bitRead(PING, 5)); break;           // additional case statements are here to provide responses for testing pins other than 2 or 5, in the range 2-13
+          case 6:  return(bitRead(PINH, 3)); break;           // this adds a few bytes of code, but a MEGA2560 is not constrained by available flash memory
+          case 7:  return(bitRead(PINH, 4)); break;
+          case 8:  return(bitRead(PINH, 5)); break;
+          case 9:  return(bitRead(PINH, 6)); break;
+          case 10: return(bitRead(PINB, 4)); break;
+          case 11: return(bitRead(PINB, 5)); break;
+          case 12: return(bitRead(PINB, 6)); break;
+          case 13: return(bitRead(PINB, 7)); break;
+        }                                                     // end switch(pin_to_read)
       #endif                                                  // OPTION_DIRECT_PADDLE_READS_MEGA
       #ifdef OPTION_DIRECT_PADDLE_PIN_READS_UNO               // since with this verion, April 2019, this option is not defined then a direct read of the pins can never occur
         return (bitRead(PIND, pin_to_read));                  // use this line on Unos and Nanos
