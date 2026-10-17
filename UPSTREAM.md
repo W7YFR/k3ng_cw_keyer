@@ -47,6 +47,7 @@ flowchart LR
   nb --> font[feature/oled-font-select]
   nb --> i2c[fix/i2c-wire-timeout]
   font --> vb[feature/vband-link]
+  vb --> tr[feature/vband-transcript]
   vb -.-> menu[feature/settings-menu]
   menu --> usb[feature/usb-port-mode]
   master --> ex[fix/exclamation-mark] --> punct[fix/punctuation-decode]
@@ -104,6 +105,7 @@ the same change (it was committed on `w7yfr` directly).
 | `feature/farnsworth-effective-speed` | feature | `feature/farnsworth-potentiometer` | yes | ready | not offered | `OPTION_FARNSWORTH_SETS_EFFECTIVE_SPEED`: the speed is the character speed, Farnsworth the effective speed |
 | `feature/winkey-farnsworth` | feature | `feature/farnsworth-effective-speed` | yes | ready | not offered | Winkey hosts' speeds translated under that option; the pots set the speeds while a host is open |
 | `feature/vband-link` | feature | `feature/oled-font-select` | yes | not for upstream | not offered | `FEATURE_VBAND_LINK`: the link to Stellaluna's ESP32 VBand adapter |
+| `feature/vband-transcript` | feature | `feature/vband-link` | yes | not for upstream | not offered | Prints the adapter's VBand transcript on the USB port; no CLI echo of your sending while it's on |
 | `feature/settings-menu` | feature | `feature/vband-link` | yes | needs work | not offered | `FEATURE_SETTINGS_MENU`: settings by name, from a menu, keyed shortcuts and the CLI |
 | `feature/usb-port-mode` | feature | `feature/settings-menu` | yes | needs work | not offered | The USB port setting: CLI or Winkey, saved, switched without a power cycle |
 

@@ -24,6 +24,11 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 ## Unreleased
 
 ### Added
+- `feature/vband-transcript`: the adapter's VBand transcript on the USB port. With the adapter's `vb.ui` on, it sends
+  the session as lines (`TR` ends a line, `TRP` is part of one), and the keyer prints them as they come, in CLI mode
+  only (nothing in Winkey mode), in any keyer mode: `[14:02Z] W7YFR: CQ CQ`. While it's streaming (`UI,1`) and
+  VBand is on, the CLI doesn't echo your paddle sending, which the transcript already has. A log line (`vb.log`) that
+  cuts into an unfinished transcript line, or the other way round, ends that line first.
 - `feature/usb-port-mode`: a USB port setting, CLI or Winkey (Device > USB port, `/KY USB WINKEY`,
   `\$ ky.usb winkey`), in builds with both `FEATURE_WINKEY_EMULATION` and `FEATURE_COMMAND_LINE_INTERFACE`.
   Changing it switches the port straight away: from the menu at once, from the CLI once its answer is out (at the
@@ -100,6 +105,8 @@ Below, newest first, each entry names its branch. Dates are when the work was me
   open) instead of clearing the display; the extra button still clears it. The dits are still sent.
 
 ### Fixed
+- `feature/settings-menu`: room for 20 of the adapter's settings and 6 option lists (was 16 and 4). Past the limit the
+  keyer dropped rows without a word, so the adapter's Transcript setting (`vb.ui`) never showed in the menu.
 - `fix/speed-pot-at-startup`: at power-on the speed is the speed pot's position (when the pot is in use). The pot
   was read before the saved settings were, so the keyer started at the saved speed and ignored the pot until it was
   turned. The pot's first reading also always reads it: from a static 0, a pot at the bottom read as 0 wpm.
