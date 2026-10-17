@@ -19,8 +19,10 @@ As of 2026-10, from upstream's history:
   buttons", "Added #define HI_TEXT"). Large ones sit open for years (RP2040 support, renaming the files).
 - New behavior goes behind a `FEATURE_` / `OPTION_` define, off by default, listed in every hardware profile's
   files. Upstream records each change in the version history at the top of `k3ng_keyer.ino`.
-- Upstream `master` was last changed in 2026-06 ("Add ESP32 support", #162). Every branch here is cut from that
-  commit.
+- Upstream `master` was quiet from 2026-06 ("Add ESP32 support", #162) until 2026-10-15/16, when K3NG pushed
+  small fixes (some pulled forward from old branches), a version bump and a new chapter of the Noise story. The
+  branches here are cut from the 2026-06 commit; each is rebased on current `master` when it's about to be offered,
+  not all at once whenever upstream moves. `w7yfr` merges upstream `master` as it moves.
 
 ## Before offering a branch
 
