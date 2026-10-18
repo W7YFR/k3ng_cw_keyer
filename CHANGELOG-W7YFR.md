@@ -23,6 +23,16 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 
 ## Unreleased
 
+### Changed
+- `feature/vband-adapter-menu`: the adapter runs the VBand group of the menu, and the keyer only draws it. Each key
+  pressed there goes to the adapter (`MK`), which sends back the screen (`MH` title, `MR` rows, `MC` cursor); the
+  keyer keeps only what's on screen, so it no longer holds a copy of the adapter's settings list. That frees about
+  770 bytes of RAM, and nothing past a fixed limit is dropped any more: a new adapter setting shows up with only the
+  adapter updated. A command's answer shows as before (`MA`), a text setting takes a keyed word (`MI` / `MW`), and
+  backing out (`MX`) returns to the VBand row. With no answer for 2 s the title reads "Adapter busy" and `B` goes
+  back. Keyed shortcuts and the CLI ask the adapter to show or set one setting (`SQ`) and show its answer (`SA`);
+  `\$ vb` prints its items as they come. Needs the adapter with the same change.
+
 ### Added
 - `feature/command-button-menu`: a Cmd button setting (Device > Cmd button, `/KY CMD MENU`, `\$ ky.cmd menu`). Free,
   the command button opens command mode as before; Menu, it opens the settings menu straight away. `B` on the menu's

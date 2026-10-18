@@ -53,6 +53,7 @@ flowchart LR
   vb -.-> menu[feature/settings-menu]
   menu --> usb[feature/usb-port-mode]
   usb --> cmdb[feature/command-button-menu]
+  cmdb --> vbm[feature/vband-adapter-menu]
   master --> ex[fix/exclamation-mark] --> punct[fix/punctuation-decode]
   master --> pfd[fix/prosign-forward-declaration] --> pio2[fix/platformio-forward-declarations]
   master --> fpot[feature/farnsworth-potentiometer]
@@ -112,6 +113,7 @@ the same change (it was committed on `w7yfr` directly).
 | `feature/settings-menu` | feature | `feature/vband-link` | yes | needs work | not offered | `FEATURE_SETTINGS_MENU`: settings by name, from a menu, keyed shortcuts and the CLI |
 | `feature/command-button-menu` | feature | `feature/usb-port-mode` | yes | needs work | not offered | The Cmd button setting: the command button opens command mode or the settings menu |
 | `feature/usb-port-mode` | feature | `feature/settings-menu` | yes | needs work | not offered | The USB port setting: CLI or Winkey, saved, switched without a power cycle |
+| `feature/vband-adapter-menu` | feature | `feature/command-button-menu` | yes | not for upstream | not offered | The adapter runs the menu's VBand group; the keyer only draws it |
 
 ## Notes on the ones that need work
 
