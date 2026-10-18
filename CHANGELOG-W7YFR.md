@@ -24,6 +24,9 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 ## Unreleased
 
 ### Added
+- `feature/settings-menu`: the adapter's settings can go in VBand > Commands itself, at the top (its Sending switch
+  does). While the adapter says our keying isn't going to VBand (`SN,0`, practice with Sending off), the display
+  shows our sending on a line of its own, without our name.
 - `feature/vband-transcript`: the adapter's VBand transcript on the USB port. With the adapter's `vb.ui` on, it sends
   the session as lines (`TR` ends a line, `TRP` is part of one), and the keyer prints them as they come, in CLI mode
   only (nothing in Winkey mode), in any keyer mode: `[14:02Z] W7YFR: CQ CQ`. While it's streaming (`UI,1`) and
