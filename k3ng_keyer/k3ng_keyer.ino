@@ -1952,6 +1952,7 @@ uint16_t memory_area_end = 0;
   char vband_link_speaker[9] = "";                  // tag of whoever the display's current line belongs to
   byte vband_link_text_behind_screen = 0;           // received text goes into the scroll buffer without replacing a status screen
   char vband_link_my_tag[9] = VBAND_LINK_MY_TAG;    // our own sending's tag: the adapter's from our VBand name ("MY"), else this
+  byte vband_link_sending = 1;                      // the adapter sends our keying to VBand ("SN,1"); "SN,0": it stays here (practice)
   #define VBAND_LINK_COMMAND_MAX 8
   unsigned long vband_link_answer_until = 0;        // command mode shows the adapter's status screens until then: its answer to a command
   byte vband_link_version_checked = 0;              // since the link last came up
@@ -2027,7 +2028,12 @@ struct settings_adapter_item {                      // one of the VBand adapter'
 #endif //FEATURE_SETTINGS_MENU
 
 #if defined(FEATURE_VBAND_LINK) && defined(FEATURE_DISPLAY)
-  #define VBAND_LINK_MY_SENDING() vband_link_set_speaker(vband_link_my_tag)   // our own sending is about to be echoed on the display
+  // our own sending is about to be echoed on the display: on a line tagged with our name while it goes to VBand,
+  // otherwise (practice) on a line of its own without one
+  #define VBAND_LINK_MY_SENDING() do { \
+      if (vband_link_sending) {vband_link_set_speaker(vband_link_my_tag);} \
+      else if (vband_link_speaker[0]) {vband_link_speaker[0] = 0; display_scroll_print_char('\n');} \
+    } while (0)
 #else
   #define VBAND_LINK_MY_SENDING()
 #endif
@@ -4378,6 +4384,7 @@ void vband_link_set_up(byte up) {
     vband_link_set_ready(0);                       // an adapter we can't hear can't be keying VBand
     vband_link_up = 0;
     vband_link_version_checked = 0;                // whatever comes back may have been reflashed
+    vband_link_sending = 1;
     vband_link_enable_tx(0);
   }
 
@@ -4403,6 +4410,10 @@ void vband_link_handle_frame() {
   #ifdef FEATURE_SETTINGS_MENU
     settings_adapter_frame(vband_link_rx_frame, fields);   // settings answers, in any mode (the menu runs in command mode)
   #endif
+
+  if (strcmp(vband_link_rx_frame, "SN") == 0) {    // "SN,1" / "SN,0": our keying goes to VBand, or stays here
+    vband_link_sending = (fields[0] != '0');
+  }
 
   if ((strcmp(vband_link_rx_frame, "MY") == 0) && fields[0]) {   // "MY,<tag>": our own tag, from our VBand name
     strncpy(vband_link_my_tag, fields, sizeof(vband_link_my_tag) - 1);
@@ -5447,11 +5458,11 @@ char settings_adapter_list(byte item) {
 
   // the menu list one of the adapter's items goes in: its group's list under Settings (the group's letter) or
   // Commands (in lower case), or Settings / Commands themselves. A setting the adapter lists among its commands
-  // comes with its group in lower case.
+  // comes with its group in lower case; with no list, it goes in Commands itself, as its commands do.
 
   settings_adapter_item &s = settings_adapter_items[item];
 
-  if (s.group == '-') {return (s.type == 'a') ? 'c' : 'v';}
+  if (s.group == '-') {return ((s.type == 'a') || (settings_adapter_kind == 'a')) ? 'c' : 'v';}
   if (islower(s.group)) {return s.group;}
   return (s.type == 'a') ? tolower(s.group) : s.group;
 
