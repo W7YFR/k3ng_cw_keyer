@@ -52,6 +52,7 @@ flowchart LR
   vb --> tr[feature/vband-transcript]
   vb -.-> menu[feature/settings-menu]
   menu --> usb[feature/usb-port-mode]
+  usb --> cmdb[feature/command-button-menu]
   master --> ex[fix/exclamation-mark] --> punct[fix/punctuation-decode]
   master --> pfd[fix/prosign-forward-declaration] --> pio2[fix/platformio-forward-declarations]
   master --> fpot[feature/farnsworth-potentiometer]
@@ -109,6 +110,7 @@ the same change (it was committed on `w7yfr` directly).
 | `feature/vband-link` | feature | `feature/oled-font-select` | yes | not for upstream | not offered | `FEATURE_VBAND_LINK`: the link to Stellaluna's ESP32 VBand adapter |
 | `feature/vband-transcript` | feature | `feature/vband-link` | yes | not for upstream | not offered | Prints the adapter's VBand transcript on the USB port; no CLI echo of your sending while it's on |
 | `feature/settings-menu` | feature | `feature/vband-link` | yes | needs work | not offered | `FEATURE_SETTINGS_MENU`: settings by name, from a menu, keyed shortcuts and the CLI |
+| `feature/command-button-menu` | feature | `feature/usb-port-mode` | yes | needs work | not offered | The Cmd button setting: the command button opens command mode or the settings menu |
 | `feature/usb-port-mode` | feature | `feature/settings-menu` | yes | needs work | not offered | The USB port setting: CLI or Winkey, saved, switched without a power cycle |
 
 ## Notes on the ones that need work

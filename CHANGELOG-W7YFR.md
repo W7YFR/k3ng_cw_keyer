@@ -24,6 +24,9 @@ Below, newest first, each entry names its branch. Dates are when the work was me
 ## Unreleased
 
 ### Added
+- `feature/command-button-menu`: a Cmd button setting (Device > Cmd button, `/KY CMD MENU`, `\$ ky.cmd menu`). Free,
+  the command button opens command mode as before; Menu, it opens the settings menu straight away. `B` on the menu's
+  top level then leaves it for command mode. Saved, in the next spare EEPROM byte after the configuration.
 - `feature/settings-menu`: the adapter's settings can go in VBand > Commands itself, at the top (its Sending switch
   does). While the adapter says our keying isn't going to VBand (`SN,0`, practice with Sending off), the display
   shows our sending on a line of its own, without our name.
