@@ -2005,6 +2005,9 @@ struct settings_adapter_item {                      // one of the VBand adapter'
   byte *settings_keyer_mode = &configuration.keyer_mode;   // command mode points this at the mode it restores on exit
   byte settings_menu_wake = 0;                      // 1 while the menu waits for a key, 2 once it has something new to show
   byte settings_menu_on_entry = 0;                  // command mode opens the menu straight away (settings_menu_open())
+  #define SETTINGS_COMMAND_BUTTON_FREE 0            // what the command button opens: command mode,
+  #define SETTINGS_COMMAND_BUTTON_MENU 1            // or the menu straight away (settings_menu_open())
+  byte settings_command_button = SETTINGS_COMMAND_BUTTON_FREE;
   #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
     #define SETTINGS_USB_PORT_SAVE_UNSET 3          // the USB port setting as saved (SETTINGS_EXTRA_USB_PORT_BITS): never,
     #define SETTINGS_USB_PORT_SAVE_CLI 2            // CLI,
@@ -4810,6 +4813,9 @@ const settings_keyer_item settings_keyer_items[] PROGMEM = {   // read with sett
   #if defined(FEATURE_WINKEY_EMULATION) && defined(FEATURE_COMMAND_LINE_INTERFACE)
     {'K', 'E', "USB",   "USB port",    'e', 0, 0, 1, 0},
   #endif
+  #if defined(FEATURE_DISPLAY) && defined(FEATURE_COMMAND_MODE)
+    {'K', 'E', "CMD",   "Cmd button",  'e', 0, 0, 1, 0},
+  #endif
   {'S', 'S', "HZ",    "Pitch",       'n', sidetone_hz_limit_low + 1, sidetone_hz_limit_high - 1, 10, 'h'},
   {'S', 'S', "MODE",  "Sidetone",    'e', 0, 0, 1, 0},
 };
@@ -4835,6 +4841,8 @@ const char settings_sidetone_mode_names[][7] PROGMEM = {"On", "Off", "Paddle"};
 const char settings_sidetone_mode_words[][4] PROGMEM = {"ON", "OFF", "PDL"};
 const char settings_usb_port_names[][7] PROGMEM = {"CLI", "Winkey"};          // SERIAL_CLI, SERIAL_WINKEY_EMULATION
 const char settings_usb_port_words[][7] PROGMEM = {"CLI", "WINKEY"};
+const char settings_command_button_names[][5] PROGMEM = {"Free", "Menu"};   // SETTINGS_COMMAND_BUTTON_* order
+const char settings_command_button_words[][5] PROGMEM = {"FREE", "MENU"};
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -4944,13 +4952,14 @@ byte settings_tx_list(byte *txs) {
 
 char settings_enum_kind(byte item) {
 
-  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter, 'U' the USB port's mode
+  // 'M' keyer mode, 'S' sidetone mode, 'T' transmitter, 'U' the USB port's mode, 'B' what the command button opens
 
   settings_keyer_item s;
 
   settings_keyer_load(item, s);
   if (s.group == 'S') {return 'S';}
   if (!strcmp(s.key, "USB")) {return 'U';}
+  if (!strcmp(s.key, "CMD")) {return 'B';}
   return strcmp(s.key, "TX") ? 'M' : 'T';
 
 }
@@ -4965,6 +4974,7 @@ byte settings_enum_count(byte item) {
     case 'M': return sizeof(settings_keyer_modes);
     case 'S': return sizeof(settings_sidetone_modes);
     case 'U': return 2;
+    case 'B': return 2;
   }
   return settings_tx_list(txs);
 
@@ -4988,6 +4998,9 @@ String settings_enum_text(byte item, byte option, byte word) {
     case 'U':
       if (word) {return String((const __FlashStringHelper *)settings_usb_port_words[option]);}
       return String((const __FlashStringHelper *)settings_usb_port_names[option]);
+    case 'B':
+      if (word) {return String((const __FlashStringHelper *)settings_command_button_words[option]);}
+      return String((const __FlashStringHelper *)settings_command_button_names[option]);
   }
   settings_tx_list(txs);
   return String(word ? "" : "TX ") + txs[option];
@@ -5020,6 +5033,8 @@ int settings_keyer_get(byte item) {
           if (settings_usb_port_switch) {return settings_usb_port_switch - 1;}   // the CLI's answer, just before it
           return primary_serial_port_mode;         // this session's: the command button at power-on can differ from the setting
       #endif
+      case 'B':
+        return settings_command_button;
     }
     count = settings_tx_list(txs);
     for (byte x = 0; x < count; x++) {
@@ -5079,6 +5094,10 @@ void settings_keyer_set(byte item, int value) {
           }
           return;                                  // not part of K3NG's configuration
       #endif
+      case 'B':
+        settings_command_button = value;
+        settings_save_extras();
+        return;                                    // not part of K3NG's configuration
       default:
         settings_tx_list(txs);
         switch_to_tx_silent(txs[value]);
@@ -6318,6 +6337,8 @@ void settings_cli(PRIMARY_SERIAL_CLS * port_to_use) {
   #define SETTINGS_EXTRA_NO_PADDLE_ECHO 0x01
   #define SETTINGS_EXTRA_USB_PORT_SHIFT 6         // two bits: SETTINGS_USB_PORT_SAVE_*, so 0xFF means never set
   #define SETTINGS_EXTRA_USB_PORT_BITS 0xC0
+  #define SETTINGS_EXTRAS_2_ADDRESS (sizeof(configuration) + 3)   // the next of those bytes
+  #define SETTINGS_EXTRA_2_COMMAND_FREE 0x01      // the command button opens command mode; cleared: the menu
 #endif
 
 void settings_save_extras() {
@@ -6332,6 +6353,9 @@ void settings_save_extras() {
       extras |= (settings_usb_port_saved << SETTINGS_EXTRA_USB_PORT_SHIFT) & SETTINGS_EXTRA_USB_PORT_BITS;
     #endif
     EEPROM.update(SETTINGS_EXTRAS_ADDRESS, extras);
+    byte extras_2 = 0xFF;
+    if (settings_command_button == SETTINGS_COMMAND_BUTTON_MENU) {extras_2 &= ~SETTINGS_EXTRA_2_COMMAND_FREE;}
+    EEPROM.update(SETTINGS_EXTRAS_2_ADDRESS, extras_2);
   #endif
 
 }
@@ -6345,6 +6369,7 @@ void initialize_settings_menu() {
       byte extras = EEPROM.read(SETTINGS_EXTRAS_ADDRESS);
       lcd_paddle_echo = (extras & SETTINGS_EXTRA_NO_PADDLE_ECHO) ? 1 : 0;   // the bit is cleared to turn echo off
     #endif
+    if (!(EEPROM.read(SETTINGS_EXTRAS_2_ADDRESS) & SETTINGS_EXTRA_2_COMMAND_FREE)) {settings_command_button = SETTINGS_COMMAND_BUTTON_MENU;}
   #endif
 
 }
@@ -11741,7 +11766,13 @@ void check_buttons() {
 
         command_mode_disable_tx = !key_tx; //Added to sync the Command Mode entry state to actual key_tx state in case changed by CLI or keyboard (WD9DMP)
         key_tx = 0;
+        #if defined(FEATURE_SETTINGS_MENU) && defined(FEATURE_DISPLAY)
+          settings_menu_on_entry = (settings_command_button == SETTINGS_COMMAND_BUTTON_MENU);   // the Cmd button setting: the menu straight away
+        #endif
         command_mode();
+        #if defined(FEATURE_SETTINGS_MENU) && defined(FEATURE_DISPLAY)
+          settings_menu_on_entry = 0;
+        #endif
         if (command_mode_disable_tx) {
           //key_tx = !store_key_tx; //Inverting pre-command mode state seems to cause Command Mode sync issues (WD9DMP)
           key_tx = 0; //Added this line to explicitly disable key_tx if command_mode_disable_tx is set after exiting Command Mode (WD9DMP)
